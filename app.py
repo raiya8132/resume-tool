@@ -188,7 +188,10 @@ def make_shokumu(d):
 
         # テーブル作成
         tbl = doc.add_table(rows=3, cols=2)
-        tbl.style = "Table Grid"
+        try:
+            tbl.style = "Table Grid"
+        except Exception:
+            pass
 
         # ヘッダー行
         tbl.rows[0].cells[0].text = "期間"
@@ -329,10 +332,30 @@ if mode == "📝 入力フォーム（ユーザー）":
         for i in range(MAX_COMPANIES):
             with st.expander(f"（{i+1}）会社情報", expanded=(i==0)):
                 cname = st.text_input("会社名", key=f"cn{i}", placeholder="〇〇株式会社")
-                cc1,cc2,cc3 = st.columns(3)
-                ps = cc1.text_input("入社年月", key=f"ps{i}", placeholder="2015年4月")
-                pe = cc2.text_input("退社年月", key=f"pe{i}", placeholder="2020年3月")
-                py = cc3.text_input("在籍年数", key=f"py{i}", placeholder="5")
+
+                # 入社年月（プルダウン）
+                st.caption("入社年月")
+                ps_col1, ps_col2 = st.columns(2)
+                ps_y = ps_col1.selectbox("入社年", YEAR_OPTIONS, key=f"ps_y{i}", label_visibility="collapsed")
+                ps_m = ps_col2.selectbox("入社月", MONTH_OPTIONS, key=f"ps_m{i}", label_visibility="collapsed")
+                ps = f"{ps_y}年{ps_m}月" if ps_y and ps_m else ""
+
+                # 退社年月（プルダウン）
+                st.caption("退社年月（在籍中の場合は空欄）")
+                pe_col1, pe_col2 = st.columns(2)
+                pe_y = pe_col1.selectbox("退社年", YEAR_OPTIONS, key=f"pe_y{i}", label_visibility="collapsed")
+                pe_m = pe_col2.selectbox("退社月", MONTH_OPTIONS, key=f"pe_m{i}", label_visibility="collapsed")
+                pe = f"{pe_y}年{pe_m}月" if pe_y and pe_m else "現在"
+
+                # 在籍期間（年・月）
+                st.caption("在籍期間")
+                py_col1, py_col2 = st.columns(2)
+                py_y = py_col1.selectbox("年", [""] + [str(n) for n in range(0, 51)], key=f"py_y{i}", label_visibility="collapsed")
+                py_m = py_col2.selectbox("ヶ月", [""] + [str(n) for n in range(0, 12)], key=f"py_m{i}", label_visibility="collapsed")
+                py_parts = []
+                if py_y: py_parts.append(f"{py_y}年")
+                if py_m: py_parts.append(f"{py_m}ヶ月")
+                py = "".join(py_parts)
                 biz  = st.text_input("事業内容", key=f"biz{i}", placeholder="〇〇の製造・販売")
                 cc4,cc5 = st.columns(2)
                 cap  = cc4.text_input("資本金（万円）", key=f"cap{i}", placeholder="5000")
