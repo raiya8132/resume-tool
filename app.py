@@ -270,6 +270,45 @@ def show_preview(d):
             st.markdown(f"　実績：{c.get('achievement','')}")
 
 
+# ── ヘルパー関数 ─────────────────────────────────────
+def get_index(options, value):
+    """valueがoptionsに存在すればそのindex、なければ0を返す"""
+    try:
+        return options.index(str(value)) if str(value) in options else 0
+    except Exception:
+        return 0
+
+def parse_birthday(birthday_str):
+    """'1995年4月10日' → ('1995','4','10')"""
+    import re
+    m = re.match(r"(\d+)年(\d+)月(\d+)日", str(birthday_str))
+    if m:
+        return m.group(1), m.group(2), m.group(3)
+    return "", "", ""
+
+def parse_yearmonth(ym_str):
+    """'2020年4月' → ('2020','4')"""
+    import re
+    m = re.match(r"(\d+)年(\d+)月", str(ym_str))
+    if m:
+        return m.group(1), m.group(2)
+    return "", ""
+
+def parse_period(period_str):
+    """'3年6ヶ月' → ('3','6')、'5年' → ('5','')"""
+    import re
+    y_m = re.match(r"(\d+)年(\d+)ヶ月", str(period_str))
+    if y_m:
+        return y_m.group(1), y_m.group(2)
+    y_only = re.match(r"(\d+)年", str(period_str))
+    if y_only:
+        return y_only.group(1), ""
+    m_only = re.match(r"(\d+)ヶ月", str(period_str))
+    if m_only:
+        return "", m_only.group(1)
+    return "", ""
+
+
 # ══════════════════════════════════════════════════════
 # サイドバー：モード選択
 # ══════════════════════════════════════════════════════
@@ -296,9 +335,13 @@ if mode == "📝 入力フォーム（ユーザー）":
 
         st.subheader("② 生年月日")
         bd_col1, bd_col2, bd_col3 = st.columns(3)
-        bd_y = bd_col1.selectbox("年", [""] + [str(y) for y in range(datetime.now().year - 15, 1919, -1)], key="bd_y")
-        bd_m = bd_col2.selectbox("月", [""] + [str(m) for m in range(1, 13)], key="bd_m")
-        bd_d = bd_col3.selectbox("日", [""] + [str(d) for d in range(1, 32)], key="bd_d")
+        BD_YEAR_OPT = [""] + [str(y) for y in range(datetime.now().year - 15, 1919, -1)]
+        BD_MON_OPT  = [""] + [str(m) for m in range(1, 13)]
+        BD_DAY_OPT  = [""] + [str(d) for d in range(1, 32)]
+        _pby, _pbm, _pbd = parse_birthday(_prev.get("birthday",""))
+        bd_y = bd_col1.selectbox("年", BD_YEAR_OPT, index=get_index(BD_YEAR_OPT, _pby), key="bd_y")
+        bd_m = bd_col2.selectbox("月", BD_MON_OPT,  index=get_index(BD_MON_OPT, _pbm),  key="bd_m")
+        bd_d = bd_col3.selectbox("日", BD_DAY_OPT,  index=get_index(BD_DAY_OPT, _pbd),  key="bd_d")
         birthday = f"{bd_y}年{bd_m}月{bd_d}日" if bd_y and bd_m and bd_d else ""
 
         # 年齢自動計算
@@ -339,10 +382,10 @@ if mode == "📝 入力フォーム（ユーザー）":
         cols_h[2].markdown("**内容**")
         for i in range(6):
             c1,c2,c3 = st.columns([1,1,4])
-            y = c1.selectbox("年", YEAR_OPTIONS, key=f"edu_y{i}", label_visibility="collapsed")
-            m = c2.selectbox("月", MONTH_OPTIONS, key=f"edu_m{i}", label_visibility="collapsed")
-            prev_c = _prev_edu[i].get("content","") if i < len(_prev_edu) else ""
-            c = c3.text_input("内容", value=prev_c, key=f"edu_c{i}", placeholder="〇〇高等学校 卒業", label_visibility="collapsed")
+            _pe = _prev_edu[i] if i < len(_prev_edu) else {}
+            y = c1.selectbox("年", YEAR_OPTIONS, index=get_index(YEAR_OPTIONS, _pe.get("year","")), key=f"edu_y{i}", label_visibility="collapsed")
+            m = c2.selectbox("月", MONTH_OPTIONS, index=get_index(MONTH_OPTIONS, _pe.get("month","")), key=f"edu_m{i}", label_visibility="collapsed")
+            c = c3.text_input("内容", value=_pe.get("content",""), key=f"edu_c{i}", placeholder="〇〇高等学校 卒業", label_visibility="collapsed")
             education.append({"year":y,"month":m,"content":c})
 
         st.subheader("⑦ 職歴")
@@ -354,10 +397,10 @@ if mode == "📝 入力フォーム（ユーザー）":
         cols_h2[2].markdown("**内容**")
         for i in range(8):
             c1,c2,c3 = st.columns([1,1,4])
-            y = c1.selectbox("年", YEAR_OPTIONS, key=f"car_y{i}", label_visibility="collapsed")
-            m = c2.selectbox("月", MONTH_OPTIONS, key=f"car_m{i}", label_visibility="collapsed")
-            prev_c = _prev_car[i].get("content","") if i < len(_prev_car) else ""
-            c = c3.text_input("内容", value=prev_c, key=f"car_c{i}", placeholder="〇〇株式会社 入社", label_visibility="collapsed")
+            _pc2 = _prev_car[i] if i < len(_prev_car) else {}
+            y = c1.selectbox("年", YEAR_OPTIONS, index=get_index(YEAR_OPTIONS, _pc2.get("year","")), key=f"car_y{i}", label_visibility="collapsed")
+            m = c2.selectbox("月", MONTH_OPTIONS, index=get_index(MONTH_OPTIONS, _pc2.get("month","")), key=f"car_m{i}", label_visibility="collapsed")
+            c = c3.text_input("内容", value=_pc2.get("content",""), key=f"car_c{i}", placeholder="〇〇株式会社 入社", label_visibility="collapsed")
             career.append({"year":y,"month":m,"content":c})
 
         st.subheader("⑧ 免許・資格")
@@ -369,10 +412,10 @@ if mode == "📝 入力フォーム（ユーザー）":
         cols_h3[2].markdown("**内容**")
         for i in range(5):
             c1,c2,c3 = st.columns([1,1,4])
-            y = c1.selectbox("年", YEAR_OPTIONS, key=f"lic_y{i}", label_visibility="collapsed")
-            m = c2.selectbox("月", MONTH_OPTIONS, key=f"lic_m{i}", label_visibility="collapsed")
-            prev_c = _prev_lic[i].get("content","") if i < len(_prev_lic) else ""
-            c = c3.text_input("内容", value=prev_c, key=f"lic_c{i}", placeholder="普通自動車第一種運転免許 取得", label_visibility="collapsed")
+            _pl = _prev_lic[i] if i < len(_prev_lic) else {}
+            y = c1.selectbox("年", YEAR_OPTIONS, index=get_index(YEAR_OPTIONS, _pl.get("year","")), key=f"lic_y{i}", label_visibility="collapsed")
+            m = c2.selectbox("月", MONTH_OPTIONS, index=get_index(MONTH_OPTIONS, _pl.get("month","")), key=f"lic_m{i}", label_visibility="collapsed")
+            c = c3.text_input("内容", value=_pl.get("content",""), key=f"lic_c{i}", placeholder="普通自動車第一種運転免許 取得", label_visibility="collapsed")
             licenses.append({"year":y,"month":m,"content":c})
 
         st.subheader("⑨ 自己PR")
@@ -386,8 +429,9 @@ if mode == "📝 入力フォーム（ユーザー）":
         st.subheader("⑪ 家族情報")
         fc1,fc2,fc3 = st.columns(3)
         dependents     = fc1.text_input("扶養家族（人数）", value=_prev.get("dependents",""), placeholder="0")
-        spouse         = fc2.selectbox("配偶者", ["無","有"])
-        spouse_support = fc3.selectbox("配偶者の扶養義務", ["無","有"])
+        SPOUSE_OPT = ["無","有"]
+        spouse         = fc2.selectbox("配偶者", SPOUSE_OPT, index=get_index(SPOUSE_OPT, _prev.get("spouse","無")))
+        spouse_support = fc3.selectbox("配偶者の扶養義務", SPOUSE_OPT, index=get_index(SPOUSE_OPT, _prev.get("spouse_support","無")))
 
         st.markdown("---")
         st.header("📋 職務経歴書")
@@ -407,31 +451,39 @@ if mode == "📝 入力フォーム（ユーザー）":
                 # 入社年月（プルダウン）
                 st.caption("入社年月")
                 ps_col1, ps_col2 = st.columns(2)
-                ps_y = ps_col1.selectbox("入社年", YEAR_OPTIONS, key=f"ps_y{i}", label_visibility="collapsed")
-                ps_m = ps_col2.selectbox("入社月", MONTH_OPTIONS, key=f"ps_m{i}", label_visibility="collapsed")
+                _psy, _psm = parse_yearmonth(_pc.get("period_start",""))
+                ps_y = ps_col1.selectbox("入社年", YEAR_OPTIONS, index=get_index(YEAR_OPTIONS, _psy), key=f"ps_y{i}", label_visibility="collapsed")
+                ps_m = ps_col2.selectbox("入社月", MONTH_OPTIONS, index=get_index(MONTH_OPTIONS, _psm), key=f"ps_m{i}", label_visibility="collapsed")
                 ps = f"{ps_y}年{ps_m}月" if ps_y and ps_m else ""
 
                 # 退社年月（プルダウン）
                 st.caption("退社年月（在籍中の場合は空欄）")
                 pe_col1, pe_col2 = st.columns(2)
-                pe_y = pe_col1.selectbox("退社年", YEAR_OPTIONS, key=f"pe_y{i}", label_visibility="collapsed")
-                pe_m = pe_col2.selectbox("退社月", MONTH_OPTIONS, key=f"pe_m{i}", label_visibility="collapsed")
+                _pend = _pc.get("period_end","")
+                _pey, _pem = parse_yearmonth(_pend) if _pend != "現在" else ("","")
+                pe_y = pe_col1.selectbox("退社年", YEAR_OPTIONS, index=get_index(YEAR_OPTIONS, _pey), key=f"pe_y{i}", label_visibility="collapsed")
+                pe_m = pe_col2.selectbox("退社月", MONTH_OPTIONS, index=get_index(MONTH_OPTIONS, _pem), key=f"pe_m{i}", label_visibility="collapsed")
                 pe = f"{pe_y}年{pe_m}月" if pe_y and pe_m else "現在"
 
                 # 在籍期間（年・月）
                 st.caption("在籍期間")
                 py_col1, py_col2 = st.columns(2)
-                py_y = py_col1.selectbox("○○年", [""] + [str(n) for n in range(0, 51)], key=f"py_y{i}")
-                py_m = py_col2.selectbox("○○ヶ月", [""] + [str(n) for n in range(0, 12)], key=f"py_m{i}")
+                TENURE_YEAR_OPT  = [""] + [str(n) for n in range(0, 51)]
+                TENURE_MON_OPT   = [""] + [str(n) for n in range(0, 12)]
+                _tyy, _tym = parse_period(_pc.get("period_years",""))
+                py_y = py_col1.selectbox("○○年", TENURE_YEAR_OPT, index=get_index(TENURE_YEAR_OPT, _tyy), key=f"py_y{i}")
+                py_m = py_col2.selectbox("○○ヶ月", TENURE_MON_OPT, index=get_index(TENURE_MON_OPT, _tym), key=f"py_m{i}")
                 py_parts = []
                 if py_y: py_parts.append(f"{py_y}年")
                 if py_m: py_parts.append(f"{py_m}ヶ月")
                 py = "".join(py_parts)
+
                 biz  = st.text_input("事業内容", value=_pc.get("business",""), key=f"biz{i}", placeholder="〇〇の製造・販売")
                 cc4,cc5 = st.columns(2)
                 cap  = cc4.text_input("資本金（万円）", value=_pc.get("capital",""), key=f"cap{i}", placeholder="5000")
                 emp  = cc5.text_input("従業員数（名）", value=_pc.get("employees",""), key=f"emp{i}", placeholder="200")
-                etype = st.selectbox("雇用形態", ["正社員","契約社員","アルバイト","派遣","その他"], key=f"et{i}")
+                ETYPE_OPT = ["正社員","契約社員","アルバイト","派遣","その他"]
+                etype = st.selectbox("雇用形態", ETYPE_OPT, index=get_index(ETYPE_OPT, _pc.get("employment_type","正社員")), key=f"et{i}")
                 dept  = st.text_input("配属先", value=_pc.get("department",""), key=f"dept{i}", placeholder="営業部 第一課")
                 jc    = st.text_area("業務内容", value=_pc.get("job_content",""), key=f"jc{i}", height=100,
                                      placeholder="・〇〇業務を担当")
