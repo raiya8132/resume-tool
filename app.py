@@ -297,9 +297,12 @@ if mode == "📝 入力フォーム（ユーザー）":
         name = st.text_input("氏名 *", placeholder="山田 太郎")
 
         st.subheader("② 生年月日")
-        col1, col2 = st.columns(2)
-        birthday = col1.text_input("生年月日", placeholder="1990年1月1日")
-        age      = col2.text_input("年齢", placeholder="35")
+        bd_col1, bd_col2, bd_col3 = st.columns(3)
+        bd_y = bd_col1.selectbox("年", [""] + [str(y) for y in range(datetime.now().year - 15, 1919, -1)], key="bd_y")
+        bd_m = bd_col2.selectbox("月", [""] + [str(m) for m in range(1, 13)], key="bd_m")
+        bd_d = bd_col3.selectbox("日", [""] + [str(d) for d in range(1, 32)], key="bd_d")
+        birthday = f"{bd_y}年{bd_m}月{bd_d}日" if bd_y and bd_m and bd_d else ""
+        age = st.text_input("年齢", placeholder="35")
 
         st.subheader("③ 住所")
         postal   = st.text_input("郵便番号", placeholder="123-4567")
