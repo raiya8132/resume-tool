@@ -182,6 +182,30 @@ def make_rirekisho(d):
     car_list  = d.get("career",    [])
     lic_list  = d.get("licenses",  [])
 
+    # 日付を自動反映（履歴書上部）
+    today = datetime.now()
+    date_str = f"{today.year}年{today.month}月{today.day}日現在"
+    for para in doc.paragraphs:
+        if "年" in para.text and "月" in para.text and "現在" in para.text:
+            for run in para.runs:
+                if "年" in run.text or "月" in run.text or "現在" in run.text:
+                    run.text = ""
+            if para.runs:
+                para.runs[0].text = date_str
+            else:
+                para.add_run(date_str)
+            break
+    # テーブル内の日付も確認
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                if "年" in cell.text and "現在" in cell.text:
+                    for para in cell.paragraphs:
+                        for run in para.runs:
+                            run.text = ""
+                    if cell.paragraphs:
+                        cell.paragraphs[0].add_run(date_str)
+
     t0 = doc.tables[0]
     set_cell(t0.rows[0].cells[1], d.get("furigana_name",""))
     set_cell(t0.rows[1].cells[1], d.get("name",""))
@@ -294,6 +318,14 @@ def make_shokumu(d):
         set_run(paras[12], f"・従業員数：{c.get('employees','')}名")
 
         t = doc.tables[0]
+        # 期間列を広めに設定
+        try:
+            from docx.shared import Cm as _Cm
+            t.columns[0].width = _Cm(4)
+            t.columns[1].width = _Cm(13)
+        except Exception:
+            pass
+
         cell_period = t.rows[1].cells[0]
         for para in cell_period.paragraphs:
             for run in para.runs: run.text = ""
@@ -313,8 +345,7 @@ def make_shokumu(d):
             for run in para.runs: run.text = ""
         if cell_content.paragraphs:
             cell_content.paragraphs[0].add_run(
-                f"《業務内容》\n{c.get('job_content','')}\n\n《実績》\n{c.get('achievement','')}")
-
+                "《業務内容》\n" + c.get("job_content","") + "\n\n《実績》\n" + c.get("achievement",""))
     # テンプレート内の「自己PR」「以上」段落を削除
     paras_to_remove = []
     for p in doc.paragraphs:
@@ -333,13 +364,20 @@ def make_shokumu(d):
 
         # 会社情報
         doc.add_paragraph(f"・事業内容：{c.get('business','')}")
-        doc.add_paragraph(f"・資本金：{c.get('capital','')}万円")
-        doc.add_paragraph(f"・従業員数：{c.get('employees','')}名")
+        doc.add_paragraph(f"・資本金：{c.get('capital','')}万円　従業員数：{c.get('employees','')}名")
 
         # テーブル作成
         tbl = doc.add_table(rows=3, cols=2)
         try:
             tbl.style = "Table Grid"
+        except Exception:
+            pass
+
+        # 列幅調整
+        try:
+            from docx.shared import Cm as _Cm
+            tbl.columns[0].width = _Cm(4)
+            tbl.columns[1].width = _Cm(13)
         except Exception:
             pass
 
@@ -354,8 +392,12 @@ def make_shokumu(d):
         # 業務内容・実績
         tbl.rows[2].cells[0].text = ""
         tbl.rows[2].cells[1].text = (
-            f"《業務内容》\n{c.get('job_content','')}\n\n《実績》\n{c.get('achievement','')}"
+            "《業務内容》\n" + c.get("job_content","") + "\n\n《実績》\n" + c.get("achievement","")
         )
+
+
+
+
 
     for i, c in enumerate(companies[1:], start=2):
         try:
@@ -701,9 +743,9 @@ if mode == "📝 入力フォーム（ユーザー）":
                 etype = st.selectbox("雇用形態", ETYPE_OPT, index=get_index(ETYPE_OPT, _pc.get("employment_type","正社員")), key=f"et{i}")
                 dept  = st.text_input("配属先", value=_pc.get("department",""), key=f"dept{i}", placeholder="営業部 第一課")
                 jc    = st.text_area("業務内容", value=_pc.get("job_content",""), key=f"jc{i}", height=100,
-                                     placeholder="・〇〇業務を担当")
+                                     placeholder="・〇〇システムの設計・運用・保守を担当\n・チームメンバーと連携し、業務効率化に貢献")
                 ach   = st.text_area("実績", value=_pc.get("achievement",""), key=f"ach{i}", height=80,
-                                     placeholder="・〇〇を達成し前年比△%向上に貢献")
+                                     placeholder="・業務フロー見直しにより処理時間を約20%短縮\n・顧客対応品質の向上に貢献")
                 companies.append({
                     "company_name":cname,"period_start":ps,"period_end":pe,
                     "period_years":py,"business":biz,"capital":cap,
@@ -846,8 +888,10 @@ else:
                             key=f"r_{r.get('id','')}",
                             use_container_width=True,
                         )
-                    except FileNotFoundError as e:
-                        col1.error(str(e))
+                    except FileNotFoundError:
+                        col1.error("❌ 履歴書テンプレートが見つかりません。管理者にお問い合わせください。")
+                    except Exception:
+                        col1.error("❌ 履歴書の生成中にエラーが発生しました。データを確認してください。")
 
                     # 職務経歴書ダウンロード
                     try:
@@ -860,8 +904,10 @@ else:
                             key=f"s_{r.get('id','')}",
                             use_container_width=True,
                         )
-                    except FileNotFoundError as e:
-                        col2.error(str(e))
+                    except FileNotFoundError:
+                        col2.error("❌ 職務経歴書テンプレートが見つかりません。管理者にお問い合わせください。")
+                    except Exception:
+                        col2.error("❌ 職務経歴書の生成中にエラーが発生しました。データを確認してください。")
 
                     st.markdown("---")
                     st.subheader("📋 入力内容プレビュー")
