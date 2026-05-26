@@ -17,7 +17,10 @@ DATA_FILE        = Path("data/submissions.json")
 TEMPLATE_FILE    = Path("rirekisho_template.docx")
 SHOKUMU_TEMPLATE = Path("shokumu_template.docx")
 MAX_COMPANIES    = 5
-SPREADSHEET_ID   = "1hhVNfpIHcNW-rjxcxVsD14QAPair4IIa5FYK6U9Ny_k"
+try:
+    SPREADSHEET_ID = st.secrets["SPREADSHEET_ID"]
+except Exception:
+    SPREADSHEET_ID = "1hhVNfpIHcNW-rjxcxVsD14QAPair4IIa5FYK6U9Ny_k"
 
 # クライアントごとのパスワード設定
 # st.secretsに設定がなければデモ用パスワードを使用
