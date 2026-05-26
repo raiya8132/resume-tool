@@ -140,6 +140,21 @@ def load_all_from_gsheet():
     except Exception:
         return []
 
+def delete_from_gsheet(record_id):
+    """スプレッドシートから該当IDの行を削除"""
+    try:
+        sheet = get_gsheet()
+        if sheet is None:
+            return False
+        all_values = sheet.get_all_values()
+        for i, row in enumerate(all_values):
+            if len(row) >= 1 and row[0] == record_id:
+                sheet.delete_rows(i + 1)
+                return True
+        return False
+    except Exception:
+        return False
+
 st.set_page_config(page_title="経歴入力フォーム", page_icon="📄", layout="centered")
 
 # ── データ保存・読み込み ──────────────────────────────
@@ -781,6 +796,9 @@ else:
                     )
                     if del_check:
                         if st.button("🗑️ 削除する", key=f"del_{r.get('id','')}", type="secondary"):
+                            # スプレッドシートから削除
+                            delete_from_gsheet(r.get("id",""))
+                            # ローカルファイルからも削除
                             records_new = load_data()
                             records_new = [x for x in records_new if x.get("id") != r.get("id")]
                             save_data(records_new)
