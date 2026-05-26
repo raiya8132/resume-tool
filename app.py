@@ -212,12 +212,12 @@ def make_rirekisho(d):
     t0 = doc.tables[0]
     set_cell(t0.rows[0].cells[1], d.get("furigana_name",""))
     set_cell(t0.rows[1].cells[1], d.get("name",""))
-    set_cell(t0.rows[1].cells[6], d.get("gender",""))
+    set_cell(t0.rows[1].cells[4], d.get("gender",""))
     set_cell(t0.rows[2].cells[1], f"{d.get('birthday','')}（満{d.get('age','')}歳）")
     set_cell(t0.rows[3].cells[1], d.get("furigana_address",""))
     set_cell(t0.rows[4].cells[1], f"〒{d.get('postal','')}　{d.get('address','')}")
     set_cell(t0.rows[5].cells[1], d.get("phone",""))
-    set_cell(t0.rows[5].cells[5], d.get("email",""))
+    set_cell(t0.rows[5].cells[4], d.get("email",""))
 
     t1 = doc.tables[1]
     for i, edu in enumerate(edu_list[:6]):
@@ -265,7 +265,7 @@ def make_rirekisho(d):
             img_buf.seek(0)
 
             # 証明写真セルに挿入（Row0-2, Cell7の結合セル）
-            photo_cell = t0.rows[0].cells[7]
+            photo_cell = t0.rows[0].cells[5]
             for para in photo_cell.paragraphs:
                 for run in para.runs:
                     run.text = ""
