@@ -716,7 +716,7 @@ if mode == "📝 入力フォーム（ユーザー）":
         if not summary.strip(): errors.append("職務要約を入力してください。")
         import re as _re
         if email.strip():
-            email_pattern = _re.compile(r'^[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}$')
+            email_pattern = _re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
             if not email_pattern.match(email.strip()):
                 errors.append("メールアドレスの形式が正しくありません（例：example@email.com）。")
         if phone.strip():
