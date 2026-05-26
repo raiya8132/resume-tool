@@ -17,11 +17,17 @@ SHOKUMU_TEMPLATE = Path("shokumu_template.docx")
 MAX_COMPANIES    = 5
 SPREADSHEET_ID   = "1hhVNfpIHcNW-rjxcxVsD14QAPair4IIa5FYK6U9Ny_k"
 
-# パスワード：st.secrets があれば使い、なければデモ用
+# クライアントごとのパスワード設定
+# st.secretsに設定がなければデモ用パスワードを使用
 try:
-    ADMIN_PASS = st.secrets["ADMIN_PASS"]
+    CLIENT_PASSWORDS = dict(st.secrets["client_passwords"])
 except Exception:
-    ADMIN_PASS = "admin1234"
+    CLIENT_PASSWORDS = {
+        "admin": "admin1234",
+    }
+
+def get_admin_pass():
+    return "admin1234"
 
 # ── Google Sheets接続 ──────────────────────────────────
 def get_gsheet():
@@ -78,11 +84,17 @@ TEMPLATE_FILE    = Path("rirekisho_template.docx")
 SHOKUMU_TEMPLATE = Path("shokumu_template.docx")
 MAX_COMPANIES    = 5
 
-# パスワード：st.secrets があれば使い、なければデモ用
+# クライアントごとのパスワード設定
+# st.secretsに設定がなければデモ用パスワードを使用
 try:
-    ADMIN_PASS = st.secrets["ADMIN_PASS"]
+    CLIENT_PASSWORDS = dict(st.secrets["client_passwords"])
 except Exception:
-    ADMIN_PASS = "admin1234"
+    CLIENT_PASSWORDS = {
+        "admin": "admin1234",
+    }
+
+def get_admin_pass():
+    return "admin1234"
 
 def load_from_gsheet():
     try:
@@ -107,20 +119,21 @@ def save_to_gsheet_full(record):
         except Exception:
             header_val = None
         if not header_val:
-            sheet.append_row(["id", "submitted_at", "name", "json_data"])
+            sheet.append_row(["id", "submitted_at", "name", "json_data", "client_id"])
         row = [
             record.get("id", ""),
             record.get("submitted_at", ""),
             record.get("name", ""),
             json.dumps(record, ensure_ascii=False),
+            record.get("client_id", "admin"),
         ]
         sheet.append_row(row)
         return True
     except Exception as e:
         return False
 
-def load_all_from_gsheet():
-    """スプレッドシートから全レコードをJSONで取得"""
+def load_all_from_gsheet(client_id=None):
+    """スプレッドシートから全レコードをJSONで取得（client_idでフィルタ可能）"""
     try:
         sheet = get_gsheet()
         if sheet is None:
@@ -133,7 +146,10 @@ def load_all_from_gsheet():
             if len(row) >= 4 and row[3]:
                 try:
                     record = json.loads(row[3])
-                    records.append(record)
+                    # client_idフィルタ
+                    row_client = row[4] if len(row) >= 5 else "admin"
+                    if client_id is None or row_client == client_id:
+                        records.append(record)
                 except Exception:
                     pass
         return records
@@ -454,6 +470,12 @@ def parse_period(period_str):
 
 
 # ══════════════════════════════════════════════════════
+# URLパラメータからclient_idを取得
+# ══════════════════════════════════════════════════════
+query_params = st.query_params
+client_id = query_params.get("client", "admin")
+
+# ══════════════════════════════════════════════════════
 # サイドバー：モード選択
 # ══════════════════════════════════════════════════════
 mode = st.sidebar.radio("モード", ["📝 入力フォーム（ユーザー）", "🔐 管理画面"])
@@ -662,6 +684,7 @@ if mode == "📝 入力フォーム（ユーザー）":
             st.session_state["preview_data"] = {
                 "name":name,"furigana_name":furigana_name,
                 "gender":gender,
+                "client_id":client_id,
                 "birthday":birthday,"age":age,
                 "postal":postal,"address":address,"furigana_address":furigana_address,
                 "phone":phone,"email":email,
@@ -714,8 +737,11 @@ else:
     if not st.session_state.admin_logged_in:
         pw = st.text_input("パスワード", type="password")
         if st.button("ログイン"):
-            if pw == ADMIN_PASS:
+            # client_idに対応するパスワードを確認
+            correct_pass = CLIENT_PASSWORDS.get(client_id, CLIENT_PASSWORDS.get("admin", "admin1234"))
+            if pw == correct_pass:
                 st.session_state.admin_logged_in = True
+                st.session_state.admin_client_id = client_id
                 st.rerun()
             else:
                 st.error("❌ パスワードが違います")
@@ -726,7 +752,8 @@ else:
             st.session_state.admin_logged_in = False
             st.rerun()
 
-        records = load_all_from_gsheet()
+        logged_client = st.session_state.get("admin_client_id", "admin")
+        records = load_all_from_gsheet(client_id=logged_client)
         if not records:
             # フォールバック：ローカルファイルから読み込み
             records = load_data()
