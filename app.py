@@ -8,6 +8,7 @@ from io import BytesIO
 from docx import Document
 from docx.shared import Pt, Cm
 from PIL import Image
+import base64
 import gspread
 from google.oauth2.service_account import Credentials
 
@@ -251,20 +252,17 @@ def make_rirekisho(d):
     t4 = doc.tables[4]
     set_cell(t4.rows[1].cells[0], d.get("pr",""))
 
-    # 証明写真の挿入
-    photo_bytes = st.session_state.get("photo_bytes")
-    if photo_bytes:
+    # 証明写真の挿入（Base64からデコード）
+    photo_b64 = d.get("photo_b64") or st.session_state.get("photo_b64")
+    if photo_b64:
         try:
-            # 画像をリサイズ（証明写真サイズ：3cm×4cm）
+            photo_bytes = base64.b64decode(photo_b64)
             img = Image.open(BytesIO(photo_bytes))
-            # アスペクト比を保ちつつ証明写真サイズにリサイズ
             img = img.convert("RGB")
             img = img.resize((int(3/4*400), 400), Image.LANCZOS)
             img_buf = BytesIO()
             img.save(img_buf, format="JPEG")
             img_buf.seek(0)
-
-            # 証明写真セルに挿入（Row0-2, Cell7の結合セル）
             photo_cell = t0.rows[0].cells[5]
             for para in photo_cell.paragraphs:
                 for run in para.runs:
@@ -272,7 +270,7 @@ def make_rirekisho(d):
             if photo_cell.paragraphs:
                 run = photo_cell.paragraphs[0].add_run()
                 run.add_picture(img_buf, width=Cm(3), height=Cm(4))
-        except Exception as e:
+        except Exception:
             pass
 
     out = BytesIO()
@@ -517,6 +515,10 @@ if mode == "📝 入力フォーム（ユーザー）":
 
     # 確認画面から戻ったときのデータ復元
     _prev = st.session_state.get("preview_data", {})
+    # 入力途中のデータ復元
+    _draft = st.session_state.get("draft_data", {})
+    if _draft and not _prev:
+        _prev = _draft
 
     with st.form("resume_form"):
 
@@ -529,10 +531,14 @@ if mode == "📝 入力フォーム（ユーザー）":
         st.subheader("📷 証明写真")
         photo_file = st.file_uploader("証明写真をアップロード（jpg/png）", type=["jpg","jpeg","png"])
         if photo_file:
-            st.image(photo_file, width=120, caption="アップロードされた写真")
-            st.session_state["photo_bytes"] = photo_file.read()
-        elif "photo_bytes" in st.session_state:
-            st.info("写真はアップロード済みです")
+            photo_bytes = photo_file.read()
+            photo_b64 = base64.b64encode(photo_bytes).decode("utf-8")
+            st.session_state["photo_b64"] = photo_b64
+            st.image(BytesIO(photo_bytes), width=120, caption="アップロードされた写真")
+        elif _prev.get("photo_b64"):
+            st.info("写真はアップロード済みです ✅")
+            img_data = base64.b64decode(_prev.get("photo_b64"))
+            st.image(BytesIO(img_data), width=120, caption="登録済みの写真")
 
         st.subheader("② 生年月日")
         bd_col1, bd_col2, bd_col3 = st.columns(3)
@@ -712,13 +718,26 @@ if mode == "📝 入力フォーム（ユーザー）":
         if errors:
             for e in errors:
                 st.error(f"❌ {e}")
+            # エラー時も入力内容をdraftとして保存
+            st.session_state["draft_data"] = {
+                "name":name,"furigana_name":furigana_name,
+                "gender":gender,
+                "birthday":birthday,"age":age,
+                "postal":postal,"address":address,"furigana_address":furigana_address,
+                "phone":phone,"email":email,
+                "education":education,"career":career,"licenses":licenses,
+                "pr":pr,"nearest_station":nearest_station,
+                "dependents":dependents,"spouse":spouse,"spouse_support":spouse_support,
+                "summary":summary,"skills":skills,"companies":companies,
+                "photo_b64": st.session_state.get("photo_b64",""),
+            }
         else:
             # session_stateに一時保存して確認画面へ
             st.session_state["preview_data"] = {
                 "name":name,"furigana_name":furigana_name,
                 "gender":gender,
                 "client_id":client_id,
-                "has_photo": "photo_bytes" in st.session_state,
+                "photo_b64": st.session_state.get("photo_b64", _prev.get("photo_b64","")),
                 "birthday":birthday,"age":age,
                 "postal":postal,"address":address,"furigana_address":furigana_address,
                 "phone":phone,"email":email,
@@ -727,6 +746,7 @@ if mode == "📝 入力フォーム（ユーザー）":
                 "dependents":dependents,"spouse":spouse,"spouse_support":spouse_support,
                 "summary":summary,"skills":skills,"companies":companies,
             }
+            st.session_state["draft_data"] = st.session_state["preview_data"].copy()
             st.session_state["show_preview"] = True
             st.rerun()
 
@@ -756,6 +776,8 @@ if mode == "📝 入力フォーム（ユーザー）":
             save_to_gsheet_full(record)
             st.session_state["show_preview"] = False
             st.session_state.pop("preview_data", None)
+            st.session_state.pop("draft_data", None)
+            st.session_state.pop("photo_b64", None)
             st.success("✅ 送信が完了しました！担当アドバイザーが確認します。")
             st.balloons()
 
