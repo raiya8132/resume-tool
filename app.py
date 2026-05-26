@@ -84,6 +84,62 @@ try:
 except Exception:
     ADMIN_PASS = "admin1234"
 
+def load_from_gsheet():
+    try:
+        sheet = get_gsheet()
+        if sheet is None:
+            return []
+        rows = sheet.get_all_records()
+        # スプレッドシートの基本情報だけなので、ローカルと統合
+        return rows
+    except Exception:
+        return []
+
+def save_to_gsheet_full(record):
+    """全データをJSONとしてスプレッドシートに保存"""
+    try:
+        sheet = get_gsheet()
+        if sheet is None:
+            return False
+        # ヘッダーがなければ追加
+        try:
+            header_val = sheet.cell(1, 1).value
+        except Exception:
+            header_val = None
+        if not header_val:
+            sheet.append_row(["id", "submitted_at", "name", "json_data"])
+        row = [
+            record.get("id", ""),
+            record.get("submitted_at", ""),
+            record.get("name", ""),
+            json.dumps(record, ensure_ascii=False),
+        ]
+        sheet.append_row(row)
+        return True
+    except Exception as e:
+        return False
+
+def load_all_from_gsheet():
+    """スプレッドシートから全レコードをJSONで取得"""
+    try:
+        sheet = get_gsheet()
+        if sheet is None:
+            return []
+        all_values = sheet.get_all_values()
+        if len(all_values) <= 1:
+            return []
+        records = []
+        for row in all_values[1:]:  # ヘッダーをスキップ
+            if len(row) >= 4 and row[3]:
+                try:
+                    record = json.loads(row[3])
+                    records.append(record)
+                except Exception:
+                    pass
+        return records
+    except Exception:
+        return []
+
 st.set_page_config(page_title="経歴入力フォーム", page_icon="📄", layout="centered")
 
 # ── データ保存・読み込み ──────────────────────────────
@@ -625,7 +681,7 @@ if mode == "📝 入力フォーム（ユーザー）":
             records = load_data()
             records.append(record)
             save_data(records)
-            save_to_gsheet(record)
+            save_to_gsheet_full(record)
             st.session_state["show_preview"] = False
             st.session_state.pop("preview_data", None)
             st.success("✅ 送信が完了しました！担当アドバイザーが確認します。")
@@ -655,7 +711,10 @@ else:
             st.session_state.admin_logged_in = False
             st.rerun()
 
-        records = load_data()
+        records = load_all_from_gsheet()
+        if not records:
+            # フォールバック：ローカルファイルから読み込み
+            records = load_data()
         if not records:
             st.info("まだ送信されたデータがありません。")
         else:
