@@ -314,7 +314,7 @@ if mode == "📝 入力フォーム（ユーザー）":
         st.subheader("⑩ 最寄り駅")
         nearest_station = st.text_input("最寄り駅", placeholder="〇〇線 〇〇駅")
 
-        st.subheader("⑪⑫ 家族情報")
+        st.subheader("⑪ 家族情報")
         fc1,fc2,fc3 = st.columns(3)
         dependents     = fc1.text_input("扶養家族（人数）", placeholder="0")
         spouse         = fc2.selectbox("配偶者", ["無","有"])
