@@ -350,8 +350,8 @@ if mode == "📝 入力フォーム（ユーザー）":
                 # 在籍期間（年・月）
                 st.caption("在籍期間")
                 py_col1, py_col2 = st.columns(2)
-                py_y = py_col1.selectbox("年", [""] + [str(n) for n in range(0, 51)], key=f"py_y{i}", label_visibility="collapsed")
-                py_m = py_col2.selectbox("ヶ月", [""] + [str(n) for n in range(0, 12)], key=f"py_m{i}", label_visibility="collapsed")
+                py_y = py_col1.selectbox("○○年", [""] + [str(n) for n in range(0, 51)], key=f"py_y{i}")
+                py_m = py_col2.selectbox("○○ヶ月", [""] + [str(n) for n in range(0, 12)], key=f"py_m{i}")
                 py_parts = []
                 if py_y: py_parts.append(f"{py_y}年")
                 if py_m: py_parts.append(f"{py_m}ヶ月")
