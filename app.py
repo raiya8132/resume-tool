@@ -509,16 +509,44 @@ mode = st.sidebar.radio("モード", ["📝 入力フォーム（ユーザー）
 if mode == "📝 入力フォーム（ユーザー）":
     st.title("📄 経歴入力フォーム")
 
-    # 個人情報の注意書き
-    st.info("🔒 入力された情報は、履歴書・職務経歴書作成の目的で使用されます。デモ利用時は架空の情報でお試しください。")
-    st.markdown("---")
-
     # 確認画面から戻ったときのデータ復元
     _prev = st.session_state.get("preview_data", {})
     # 入力途中のデータ復元
     _draft = st.session_state.get("draft_data", {})
     if _draft and not _prev:
         _prev = _draft
+
+    # プレビュー表示中はフォームを非表示
+    if st.session_state.get("show_preview") and "preview_data" in st.session_state:
+        d = st.session_state["preview_data"]
+        st.subheader("📋 入力内容の確認")
+        st.caption("内容をご確認ください。修正がある場合は「編集に戻る」を押してください。")
+        show_preview(d)
+        col_back, col_submit = st.columns(2)
+        if col_back.button("✏️ 編集に戻る", use_container_width=True):
+            st.session_state["show_preview"] = False
+            st.rerun()
+        if col_submit.button("✅ このまま送信する", type="primary", use_container_width=True):
+            record = {
+                "id": datetime.now().strftime("%Y%m%d%H%M%S") + "_" + uuid.uuid4().hex[:8],
+                "submitted_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                **d,
+            }
+            records = load_data()
+            records.append(record)
+            save_data(records)
+            save_to_gsheet_full(record)
+            st.session_state["show_preview"] = False
+            st.session_state.pop("preview_data", None)
+            st.session_state.pop("draft_data", None)
+            st.session_state.pop("photo_b64", None)
+            st.success("✅ 送信が完了しました！担当アドバイザーが確認します。")
+            st.balloons()
+        st.stop()
+
+    # 個人情報の注意書き
+    st.info("🔒 入力された情報は、履歴書・職務経歴書作成の目的で使用されます。デモ利用時は架空の情報でお試しください。")
+    st.markdown("---")
 
     with st.form("resume_form"):
 
@@ -750,36 +778,7 @@ if mode == "📝 入力フォーム（ユーザー）":
             st.session_state["show_preview"] = True
             st.rerun()
 
-    # 確認画面
-    if st.session_state.get("show_preview") and "preview_data" in st.session_state:
-        d = st.session_state["preview_data"]
-        st.markdown("---")
-        st.subheader("📋 入力内容の確認")
-        st.caption("内容をご確認ください。修正がある場合は「編集に戻る」を押してください。")
 
-        show_preview(d)
-
-        col_back, col_submit = st.columns(2)
-        if col_back.button("✏️ 編集に戻る", use_container_width=True):
-            st.session_state["show_preview"] = False
-            st.rerun()
-
-        if col_submit.button("✅ このまま送信する", type="primary", use_container_width=True):
-            record = {
-                "id": datetime.now().strftime("%Y%m%d%H%M%S") + "_" + uuid.uuid4().hex[:8],
-                "submitted_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                **d,
-            }
-            records = load_data()
-            records.append(record)
-            save_data(records)
-            save_to_gsheet_full(record)
-            st.session_state["show_preview"] = False
-            st.session_state.pop("preview_data", None)
-            st.session_state.pop("draft_data", None)
-            st.session_state.pop("photo_b64", None)
-            st.success("✅ 送信が完了しました！担当アドバイザーが確認します。")
-            st.balloons()
 
 # ══════════════════════════════════════════════════════
 # 管理者側：管理画面
