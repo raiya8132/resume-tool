@@ -734,6 +734,11 @@ else:
     if "admin_logged_in" not in st.session_state:
         st.session_state.admin_logged_in = False
 
+    # URLのclient_idとセッションのclient_idが違う場合は強制ログアウト
+    if st.session_state.get("admin_client_id") != client_id:
+        st.session_state.admin_logged_in = False
+        st.session_state.admin_client_id = None
+
     if not st.session_state.admin_logged_in:
         pw = st.text_input("パスワード", type="password")
         if st.button("ログイン"):
