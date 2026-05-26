@@ -300,7 +300,19 @@ if mode == "📝 入力フォーム（ユーザー）":
         bd_m = bd_col2.selectbox("月", [""] + [str(m) for m in range(1, 13)], key="bd_m")
         bd_d = bd_col3.selectbox("日", [""] + [str(d) for d in range(1, 32)], key="bd_d")
         birthday = f"{bd_y}年{bd_m}月{bd_d}日" if bd_y and bd_m and bd_d else ""
-        age = st.text_input("年齢", placeholder="35")
+
+        # 年齢自動計算
+        if bd_y and bd_m and bd_d:
+            try:
+                today = datetime.now()
+                born = datetime(int(bd_y), int(bd_m), int(bd_d))
+                age_val = today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+                age = str(age_val)
+                st.caption(f"年齢：{age}歳（自動計算）")
+            except Exception:
+                age = ""
+        else:
+            age = ""
 
         st.subheader("③ 住所")
         postal   = st.text_input("郵便番号", value=_prev.get("postal",""), placeholder="123-4567")
@@ -320,6 +332,7 @@ if mode == "📝 入力フォーム（ユーザー）":
         st.subheader("⑥ 学歴（高校から・西暦）")
         st.caption("年・月をプルダウンで選び、内容を入力してください")
         education = []
+        _prev_edu = _prev.get("education", [{}]*6)
         cols_h = st.columns([1,1,4])
         cols_h[0].markdown("**年**")
         cols_h[1].markdown("**月**")
@@ -328,11 +341,13 @@ if mode == "📝 入力フォーム（ユーザー）":
             c1,c2,c3 = st.columns([1,1,4])
             y = c1.selectbox("年", YEAR_OPTIONS, key=f"edu_y{i}", label_visibility="collapsed")
             m = c2.selectbox("月", MONTH_OPTIONS, key=f"edu_m{i}", label_visibility="collapsed")
-            c = c3.text_input("内容", key=f"edu_c{i}", placeholder="〇〇高等学校 卒業", label_visibility="collapsed")
+            prev_c = _prev_edu[i].get("content","") if i < len(_prev_edu) else ""
+            c = c3.text_input("内容", value=prev_c, key=f"edu_c{i}", placeholder="〇〇高等学校 卒業", label_visibility="collapsed")
             education.append({"year":y,"month":m,"content":c})
 
         st.subheader("⑦ 職歴")
         career = []
+        _prev_car = _prev.get("career", [{}]*8)
         cols_h2 = st.columns([1,1,4])
         cols_h2[0].markdown("**年**")
         cols_h2[1].markdown("**月**")
@@ -341,11 +356,13 @@ if mode == "📝 入力フォーム（ユーザー）":
             c1,c2,c3 = st.columns([1,1,4])
             y = c1.selectbox("年", YEAR_OPTIONS, key=f"car_y{i}", label_visibility="collapsed")
             m = c2.selectbox("月", MONTH_OPTIONS, key=f"car_m{i}", label_visibility="collapsed")
-            c = c3.text_input("内容", key=f"car_c{i}", placeholder="〇〇株式会社 入社", label_visibility="collapsed")
+            prev_c = _prev_car[i].get("content","") if i < len(_prev_car) else ""
+            c = c3.text_input("内容", value=prev_c, key=f"car_c{i}", placeholder="〇〇株式会社 入社", label_visibility="collapsed")
             career.append({"year":y,"month":m,"content":c})
 
         st.subheader("⑧ 免許・資格")
         licenses = []
+        _prev_lic = _prev.get("licenses", [{}]*5)
         cols_h3 = st.columns([1,1,4])
         cols_h3[0].markdown("**年**")
         cols_h3[1].markdown("**月**")
@@ -354,7 +371,8 @@ if mode == "📝 入力フォーム（ユーザー）":
             c1,c2,c3 = st.columns([1,1,4])
             y = c1.selectbox("年", YEAR_OPTIONS, key=f"lic_y{i}", label_visibility="collapsed")
             m = c2.selectbox("月", MONTH_OPTIONS, key=f"lic_m{i}", label_visibility="collapsed")
-            c = c3.text_input("内容", key=f"lic_c{i}", placeholder="普通自動車第一種運転免許 取得", label_visibility="collapsed")
+            prev_c = _prev_lic[i].get("content","") if i < len(_prev_lic) else ""
+            c = c3.text_input("内容", value=prev_c, key=f"lic_c{i}", placeholder="普通自動車第一種運転免許 取得", label_visibility="collapsed")
             licenses.append({"year":y,"month":m,"content":c})
 
         st.subheader("⑨ 自己PR")
@@ -380,9 +398,11 @@ if mode == "📝 入力フォーム（ユーザー）":
 
         st.subheader("職務経歴（最大5社）")
         companies = []
+        _prev_comp = _prev.get("companies", [{}]*MAX_COMPANIES)
         for i in range(MAX_COMPANIES):
+            _pc = _prev_comp[i] if i < len(_prev_comp) else {}
             with st.expander(f"（{i+1}）会社情報", expanded=(i==0)):
-                cname = st.text_input("会社名", key=f"cn{i}", placeholder="〇〇株式会社")
+                cname = st.text_input("会社名", value=_pc.get("company_name",""), key=f"cn{i}", placeholder="〇〇株式会社")
 
                 # 入社年月（プルダウン）
                 st.caption("入社年月")
@@ -407,15 +427,15 @@ if mode == "📝 入力フォーム（ユーザー）":
                 if py_y: py_parts.append(f"{py_y}年")
                 if py_m: py_parts.append(f"{py_m}ヶ月")
                 py = "".join(py_parts)
-                biz  = st.text_input("事業内容", key=f"biz{i}", placeholder="〇〇の製造・販売")
+                biz  = st.text_input("事業内容", value=_pc.get("business",""), key=f"biz{i}", placeholder="〇〇の製造・販売")
                 cc4,cc5 = st.columns(2)
-                cap  = cc4.text_input("資本金（万円）", key=f"cap{i}", placeholder="5000")
-                emp  = cc5.text_input("従業員数（名）", key=f"emp{i}", placeholder="200")
+                cap  = cc4.text_input("資本金（万円）", value=_pc.get("capital",""), key=f"cap{i}", placeholder="5000")
+                emp  = cc5.text_input("従業員数（名）", value=_pc.get("employees",""), key=f"emp{i}", placeholder="200")
                 etype = st.selectbox("雇用形態", ["正社員","契約社員","アルバイト","派遣","その他"], key=f"et{i}")
-                dept  = st.text_input("配属先", key=f"dept{i}", placeholder="営業部 第一課")
-                jc    = st.text_area("業務内容", key=f"jc{i}", height=100,
+                dept  = st.text_input("配属先", value=_pc.get("department",""), key=f"dept{i}", placeholder="営業部 第一課")
+                jc    = st.text_area("業務内容", value=_pc.get("job_content",""), key=f"jc{i}", height=100,
                                      placeholder="・〇〇業務を担当")
-                ach   = st.text_area("実績", key=f"ach{i}", height=80,
+                ach   = st.text_area("実績", value=_pc.get("achievement",""), key=f"ach{i}", height=80,
                                      placeholder="・〇〇を達成し前年比△%向上に貢献")
                 companies.append({
                     "company_name":cname,"period_start":ps,"period_end":pe,
@@ -432,6 +452,10 @@ if mode == "📝 入力フォーム（ユーザー）":
         if not name.strip():    errors.append("氏名を入力してください。")
         if not pr.strip():      errors.append("自己PRを入力してください。")
         if not summary.strip(): errors.append("職務要約を入力してください。")
+        if email.strip() and ("@" not in email or "." not in email):
+            errors.append("メールアドレスの形式が正しくありません（@ と . を含めてください）。")
+        if phone.strip() and not all(c.isdigit() or c == "-" for c in phone.strip()):
+            errors.append("電話番号は数字とハイフン（-）のみ入力してください。")
         if errors:
             for e in errors:
                 st.error(f"❌ {e}")
