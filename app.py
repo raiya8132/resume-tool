@@ -225,6 +225,56 @@ def make_shokumu(d):
     out.seek(0)
     return out
 
+# ── プレビュー表示関数 ────────────────────────────────
+def show_preview(d):
+    """応募者データをプレビュー表示する"""
+    st.markdown(f"**【氏名】** {d.get('furigana_name','')} / {d.get('name','')}")
+    st.markdown(f"**【生年月日】** {d.get('birthday','')}（{d.get('age','')}歳）")
+    st.markdown(f"**【住所】** 〒{d.get('postal','')}　{d.get('address','')}　（{d.get('furigana_address','')}）")
+    st.markdown(f"**【電話】** {d.get('phone','')}　**【メール】** {d.get('email','')}")
+    st.markdown(f"**【最寄り駅】** {d.get('nearest_station','')}")
+    st.markdown(f"**【扶養家族】** {d.get('dependents','')}人　**【配偶者】** {d.get('spouse','')}　**【配偶者扶養義務】** {d.get('spouse_support','')}")
+
+    st.markdown("---")
+    st.markdown("**【学歴】**")
+    for e in d.get("education", []):
+        if e.get("content"):
+            st.markdown(f"　{e.get('year','')}年{e.get('month','')}月　{e.get('content','')}")
+
+    st.markdown("**【職歴】**")
+    for c in d.get("career", []):
+        if c.get("content"):
+            st.markdown(f"　{c.get('year','')}年{c.get('month','')}月　{c.get('content','')}")
+
+    st.markdown("**【免許・資格】**")
+    for l in d.get("licenses", []):
+        if l.get("content"):
+            st.markdown(f"　{l.get('year','')}年{l.get('month','')}月　{l.get('content','')}")
+
+    st.markdown("---")
+    st.markdown("**【自己PR】**")
+    st.markdown(d.get("pr",""))
+
+    st.markdown("---")
+    st.markdown("**【職務要約】**")
+    st.markdown(d.get("summary",""))
+
+    st.markdown("**【活かせるスキル】**")
+    st.markdown(d.get("skills",""))
+
+    st.markdown("**【職務経歴】**")
+    for i, c in enumerate(d.get("companies", [])):
+        if not c.get("company_name"):
+            continue
+        st.markdown(f"**（{i+1}）{c.get('company_name','')}**　{c.get('period_start','')}〜{c.get('period_end','')}（{c.get('period_years','')}）")
+        st.markdown(f"　事業内容：{c.get('business','')}　／　資本金：{c.get('capital','')}万円　／　従業員数：{c.get('employees','')}名")
+        st.markdown(f"　雇用形態：{c.get('employment_type','')}　配属先：{c.get('department','')}")
+        if c.get("job_content"):
+            st.markdown(f"　業務内容：{c.get('job_content','')}")
+        if c.get("achievement"):
+            st.markdown(f"　実績：{c.get('achievement','')}")
+
+
 # ══════════════════════════════════════════════════════
 # サイドバー：モード選択
 # ══════════════════════════════════════════════════════
@@ -314,7 +364,7 @@ if mode == "📝 入力フォーム（ユーザー）":
         st.subheader("⑩ 最寄り駅")
         nearest_station = st.text_input("最寄り駅", placeholder="〇〇線 〇〇駅")
 
-        st.subheader("⑪ 家族情報")
+        st.subheader("【11・12】家族情報")
         fc1,fc2,fc3 = st.columns(3)
         dependents     = fc1.text_input("扶養家族（人数）", placeholder="0")
         spouse         = fc2.selectbox("配偶者", ["無","有"])
@@ -374,7 +424,7 @@ if mode == "📝 入力フォーム（ユーザー）":
                 })
 
         st.markdown("---")
-        submitted = st.form_submit_button("✅ 送信する", type="primary", use_container_width=True)
+        submitted = st.form_submit_button("📋 内容を確認する", type="primary", use_container_width=True)
 
     if submitted:
         errors = []
@@ -385,9 +435,8 @@ if mode == "📝 入力フォーム（ユーザー）":
             for e in errors:
                 st.error(f"❌ {e}")
         else:
-            record = {
-                "id": datetime.now().strftime("%Y%m%d%H%M%S"),
-                "submitted_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            # session_stateに一時保存して確認画面へ
+            st.session_state["preview_data"] = {
                 "name":name,"furigana_name":furigana_name,
                 "birthday":birthday,"age":age,
                 "postal":postal,"address":address,"furigana_address":furigana_address,
@@ -397,19 +446,36 @@ if mode == "📝 入力フォーム（ユーザー）":
                 "dependents":dependents,"spouse":spouse,"spouse_support":spouse_support,
                 "summary":summary,"skills":skills,"companies":companies,
             }
+            st.session_state["show_preview"] = True
+            st.rerun()
+
+    # 確認画面
+    if st.session_state.get("show_preview") and "preview_data" in st.session_state:
+        d = st.session_state["preview_data"]
+        st.markdown("---")
+        st.subheader("📋 入力内容の確認")
+        st.caption("内容をご確認ください。修正がある場合は「編集に戻る」を押してください。")
+
+        show_preview(d)
+
+        col_back, col_submit = st.columns(2)
+        if col_back.button("✏️ 編集に戻る", use_container_width=True):
+            st.session_state["show_preview"] = False
+            st.rerun()
+
+        if col_submit.button("✅ このまま送信する", type="primary", use_container_width=True):
+            record = {
+                "id": datetime.now().strftime("%Y%m%d%H%M%S"),
+                "submitted_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                **d,
+            }
             records = load_data()
             records.append(record)
             save_data(records)
+            st.session_state["show_preview"] = False
+            st.session_state.pop("preview_data", None)
             st.success("✅ 送信が完了しました！担当アドバイザーが確認します。")
             st.balloons()
-
-            # 送信完了後の確認表示
-            st.markdown("---")
-            st.subheader("📋 送信内容の確認")
-            st.markdown(f"**氏名：** {name}")
-            st.markdown(f"**メールアドレス：** {email}")
-            st.markdown(f"**職務要約：** {summary[:100]}{'...' if len(summary) > 100 else ''}")
-            st.markdown(f"**自己PR：** {pr[:100]}{'...' if len(pr) > 100 else ''}")
 
 # ══════════════════════════════════════════════════════
 # 管理者側：管理画面
@@ -491,11 +557,8 @@ else:
                         col2.error(str(e))
 
                     st.markdown("---")
-                    st.markdown(f"**氏名：** {r.get('name','')}　**生年月日：** {r.get('birthday','')}（{r.get('age','')}歳）")
-                    st.markdown(f"**住所：** 〒{r.get('postal','')}　{r.get('address','')}")
-                    st.markdown(f"**電話：** {r.get('phone','')}　**メール：** {r.get('email','')}")
-                    if r.get('pr'):
-                        st.markdown(f"**自己PR：** {r.get('pr','')[:80]}...")
+                    st.subheader("📋 入力内容プレビュー")
+                    show_preview(r)
 
                     # 削除機能
                     st.markdown("---")
