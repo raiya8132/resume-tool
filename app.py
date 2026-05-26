@@ -6,7 +6,8 @@ from datetime import datetime
 from pathlib import Path
 from io import BytesIO
 from docx import Document
-from docx.shared import Pt
+from docx.shared import Pt, Cm
+from PIL import Image
 import gspread
 from google.oauth2.service_account import Credentials
 
@@ -211,7 +212,7 @@ def make_rirekisho(d):
     t0 = doc.tables[0]
     set_cell(t0.rows[0].cells[1], d.get("furigana_name",""))
     set_cell(t0.rows[1].cells[1], d.get("name",""))
-    set_cell(t0.rows[1].cells[3], d.get("gender",""))
+    set_cell(t0.rows[1].cells[6], d.get("gender",""))
     set_cell(t0.rows[2].cells[1], f"{d.get('birthday','')}（満{d.get('age','')}歳）")
     set_cell(t0.rows[3].cells[1], d.get("furigana_address",""))
     set_cell(t0.rows[4].cells[1], f"〒{d.get('postal','')}　{d.get('address','')}")
@@ -249,6 +250,30 @@ def make_rirekisho(d):
 
     t4 = doc.tables[4]
     set_cell(t4.rows[1].cells[0], d.get("pr",""))
+
+    # 証明写真の挿入
+    photo_bytes = st.session_state.get("photo_bytes")
+    if photo_bytes:
+        try:
+            # 画像をリサイズ（証明写真サイズ：3cm×4cm）
+            img = Image.open(BytesIO(photo_bytes))
+            # アスペクト比を保ちつつ証明写真サイズにリサイズ
+            img = img.convert("RGB")
+            img = img.resize((int(3/4*400), 400), Image.LANCZOS)
+            img_buf = BytesIO()
+            img.save(img_buf, format="JPEG")
+            img_buf.seek(0)
+
+            # 証明写真セルに挿入（Row0-2, Cell7の結合セル）
+            photo_cell = t0.rows[0].cells[7]
+            for para in photo_cell.paragraphs:
+                for run in para.runs:
+                    run.text = ""
+            if photo_cell.paragraphs:
+                run = photo_cell.paragraphs[0].add_run()
+                run.add_picture(img_buf, width=Cm(3), height=Cm(4))
+        except Exception as e:
+            pass
 
     out = BytesIO()
     doc.save(out)
@@ -501,6 +526,14 @@ if mode == "📝 入力フォーム（ユーザー）":
         GENDER_OPT = ["", "男", "女"]
         gender = st.selectbox("性別", GENDER_OPT, index=get_index(GENDER_OPT, _prev.get("gender","")))
 
+        st.subheader("📷 証明写真")
+        photo_file = st.file_uploader("証明写真をアップロード（jpg/png）", type=["jpg","jpeg","png"])
+        if photo_file:
+            st.image(photo_file, width=120, caption="アップロードされた写真")
+            st.session_state["photo_bytes"] = photo_file.read()
+        elif "photo_bytes" in st.session_state:
+            st.info("写真はアップロード済みです")
+
         st.subheader("② 生年月日")
         bd_col1, bd_col2, bd_col3 = st.columns(3)
         BD_YEAR_OPT = [""] + [str(y) for y in range(datetime.now().year - 15, 1919, -1)]
@@ -685,6 +718,7 @@ if mode == "📝 入力フォーム（ユーザー）":
                 "name":name,"furigana_name":furigana_name,
                 "gender":gender,
                 "client_id":client_id,
+                "has_photo": "photo_bytes" in st.session_state,
                 "birthday":birthday,"age":age,
                 "postal":postal,"address":address,"furigana_address":furigana_address,
                 "phone":phone,"email":email,
