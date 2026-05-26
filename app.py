@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import json
-import shutil
 from datetime import datetime
 from pathlib import Path
 from io import BytesIO
@@ -11,12 +10,18 @@ from docx.shared import Pt
 # ── 設定 ──────────────────────────────────────────────
 DATA_FILE        = Path("data/submissions.json")
 TEMPLATE_FILE    = Path("rirekisho_template.docx")
-ADMIN_PASS       = "admin1234"
+SHOKUMU_TEMPLATE = Path("shokumu_template.docx")
 MAX_COMPANIES    = 5
+
+# パスワード：st.secrets があれば使い、なければデモ用
+try:
+    ADMIN_PASS = st.secrets["ADMIN_PASS"]
+except Exception:
+    ADMIN_PASS = "admin1234"
 
 st.set_page_config(page_title="経歴入力フォーム", page_icon="📄", layout="centered")
 
-# ── データ保存 ────────────────────────────────────────
+# ── データ保存・読み込み ──────────────────────────────
 def load_data():
     DATA_FILE.parent.mkdir(exist_ok=True)
     if DATA_FILE.exists():
@@ -29,7 +34,6 @@ def save_data(records):
 
 # ── セルへの書き込み ──────────────────────────────────
 def set_cell(cell, text):
-    """セルのテキストを書き込む（既存の書式をリセット）"""
     for para in cell.paragraphs:
         for run in para.runs:
             run.text = ""
@@ -42,9 +46,7 @@ def set_cell(cell, text):
 # ── 履歴書テンプレートに流し込む ─────────────────────
 def make_rirekisho(d):
     if not TEMPLATE_FILE.exists():
-        raise FileNotFoundError("rirekisho_template.docx が見つかりません。resume_toolフォルダに入れてください。")
-
-    # テンプレートをメモリ上にコピー
+        raise FileNotFoundError("rirekisho_template.docx が見つかりません。")
     buf = BytesIO()
     buf.write(TEMPLATE_FILE.read_bytes())
     buf.seek(0)
@@ -54,19 +56,15 @@ def make_rirekisho(d):
     car_list  = d.get("career",    [])
     lic_list  = d.get("licenses",  [])
 
-    # ── テーブル0：基本情報 ───────────────────────────
     t0 = doc.tables[0]
     set_cell(t0.rows[0].cells[1], d.get("furigana_name",""))
     set_cell(t0.rows[1].cells[1], d.get("name",""))
-    set_cell(t0.rows[2].cells[1],
-             f"{d.get('birthday','')}（満{d.get('age','')}歳）")
+    set_cell(t0.rows[2].cells[1], f"{d.get('birthday','')}（満{d.get('age','')}歳）")
     set_cell(t0.rows[3].cells[1], d.get("furigana_address",""))
-    set_cell(t0.rows[4].cells[1],
-             f"〒{d.get('postal','')}　{d.get('address','')}")
+    set_cell(t0.rows[4].cells[1], f"〒{d.get('postal','')}　{d.get('address','')}")
     set_cell(t0.rows[5].cells[1], d.get("phone",""))
     set_cell(t0.rows[5].cells[5], d.get("email",""))
 
-    # ── テーブル1：学歴・職歴 ────────────────────────
     t1 = doc.tables[1]
     for i, edu in enumerate(edu_list[:6]):
         r = i + 2
@@ -82,7 +80,6 @@ def make_rirekisho(d):
             set_cell(t1.rows[r].cells[1], job.get("month",""))
             set_cell(t1.rows[r].cells[2], job.get("content",""))
 
-    # ── テーブル2：免許・資格 ────────────────────────
     t2 = doc.tables[2]
     for i, lic in enumerate(lic_list[:3]):
         r = i + 1
@@ -91,15 +88,12 @@ def make_rirekisho(d):
             set_cell(t2.rows[r].cells[1], lic.get("month",""))
             set_cell(t2.rows[r].cells[2], lic.get("content",""))
 
-    # ── テーブル3：通勤・家族情報 ────────────────────
     t3 = doc.tables[3]
     set_cell(t3.rows[1].cells[1], d.get("nearest_station",""))
-    set_cell(t3.rows[1].cells[2],
-             f"（配偶者を除く）{d.get('dependents','0')}人")
+    set_cell(t3.rows[1].cells[2], f"（配偶者を除く）{d.get('dependents','0')}人")
     set_cell(t3.rows[1].cells[3], d.get("spouse","無"))
     set_cell(t3.rows[1].cells[4], d.get("spouse_support","無"))
 
-    # ── テーブル4：自己PR ────────────────────────────
     t4 = doc.tables[4]
     set_cell(t4.rows[1].cells[0], d.get("pr",""))
 
@@ -108,13 +102,10 @@ def make_rirekisho(d):
     out.seek(0)
     return out
 
-
-# ── 職務経歴書（テンプレート流し込み）──────────────
-SHOKUMU_TEMPLATE = Path("shokumu_template.docx")
-
+# ── 職務経歴書テンプレートに流し込む ─────────────────
 def make_shokumu(d):
     if not SHOKUMU_TEMPLATE.exists():
-        raise FileNotFoundError("shokumu_template.docx が見つかりません。resume_toolフォルダに入れてください。")
+        raise FileNotFoundError("shokumu_template.docx が見つかりません。")
 
     buf_in = BytesIO(SHOKUMU_TEMPLATE.read_bytes())
     doc = Document(buf_in)
@@ -138,22 +129,14 @@ def make_shokumu(d):
         p = doc.add_paragraph()
         p.add_run(str(text) if text else "")
 
-    # 日付・氏名
     if paras[2].runs:
         paras[2].runs[0].text = f"{datetime.now().strftime('%Y年%m月%d日')}現在"
     set_run(paras[3], f"氏名　{d.get('name','')}")
-
-    # 職務要約
     set_run(paras[5], d.get("summary",""))
-
-    # スキル
     set_run(paras[7], d.get("skills",""))
-
-    # 自己PR
     if len(paras) > 18:
         set_run(paras[18], d.get("pr",""))
 
-    # 1社目
     companies = d.get("companies", [])
     if companies:
         c = companies[0]
@@ -184,7 +167,6 @@ def make_shokumu(d):
             cell_content.paragraphs[0].add_run(
                 f"《業務内容》\n{c.get('job_content','')}\n\n《実績》\n{c.get('achievement','')}")
 
-    # 2社目以降
     for i, c in enumerate(companies[1:], start=2):
         if not c.get("company_name"):
             continue
@@ -201,7 +183,6 @@ def make_shokumu(d):
     out.seek(0)
     return out
 
-
 # ══════════════════════════════════════════════════════
 # サイドバー：モード選択
 # ══════════════════════════════════════════════════════
@@ -212,7 +193,9 @@ mode = st.sidebar.radio("モード", ["📝 入力フォーム（ユーザー）
 # ══════════════════════════════════════════════════════
 if mode == "📝 入力フォーム（ユーザー）":
     st.title("📄 経歴入力フォーム")
-    st.caption("担当アドバイザーから案内されたフォームです。各項目を入力して送信してください。")
+
+    # 個人情報の注意書き
+    st.info("🔒 入力された情報は、履歴書・職務経歴書作成の目的で使用されます。デモ利用時は架空の情報でお試しください。")
     st.markdown("---")
 
     with st.form("resume_form"):
@@ -237,8 +220,12 @@ if mode == "📝 入力フォーム（ユーザー）":
         st.subheader("⑤ メールアドレス")
         email = st.text_input("メールアドレス", placeholder="example@email.com")
 
+        # 年・月の選択肢
+        YEAR_OPTIONS  = [""] + [str(y) for y in range(datetime.now().year, 1959, -1)]
+        MONTH_OPTIONS = [""] + [str(m) for m in range(1, 13)]
+
         st.subheader("⑥ 学歴（高校から・西暦）")
-        st.caption("年・月・内容を入力してください")
+        st.caption("年・月をプルダウンで選び、内容を入力してください")
         education = []
         cols_h = st.columns([1,1,4])
         cols_h[0].markdown("**年**")
@@ -246,8 +233,8 @@ if mode == "📝 入力フォーム（ユーザー）":
         cols_h[2].markdown("**内容**")
         for i in range(6):
             c1,c2,c3 = st.columns([1,1,4])
-            y = c1.text_input("年", key=f"edu_y{i}", placeholder="2006", label_visibility="collapsed")
-            m = c2.text_input("月", key=f"edu_m{i}", placeholder="3",    label_visibility="collapsed")
+            y = c1.selectbox("年", YEAR_OPTIONS, key=f"edu_y{i}", label_visibility="collapsed")
+            m = c2.selectbox("月", MONTH_OPTIONS, key=f"edu_m{i}", label_visibility="collapsed")
             c = c3.text_input("内容", key=f"edu_c{i}", placeholder="〇〇高等学校 卒業", label_visibility="collapsed")
             education.append({"year":y,"month":m,"content":c})
 
@@ -259,8 +246,8 @@ if mode == "📝 入力フォーム（ユーザー）":
         cols_h2[2].markdown("**内容**")
         for i in range(8):
             c1,c2,c3 = st.columns([1,1,4])
-            y = c1.text_input("年", key=f"car_y{i}", placeholder="2010", label_visibility="collapsed")
-            m = c2.text_input("月", key=f"car_m{i}", placeholder="4",    label_visibility="collapsed")
+            y = c1.selectbox("年", YEAR_OPTIONS, key=f"car_y{i}", label_visibility="collapsed")
+            m = c2.selectbox("月", MONTH_OPTIONS, key=f"car_m{i}", label_visibility="collapsed")
             c = c3.text_input("内容", key=f"car_c{i}", placeholder="〇〇株式会社 入社", label_visibility="collapsed")
             career.append({"year":y,"month":m,"content":c})
 
@@ -272,8 +259,8 @@ if mode == "📝 入力フォーム（ユーザー）":
         cols_h3[2].markdown("**内容**")
         for i in range(5):
             c1,c2,c3 = st.columns([1,1,4])
-            y = c1.text_input("年", key=f"lic_y{i}", placeholder="2012", label_visibility="collapsed")
-            m = c2.text_input("月", key=f"lic_m{i}", placeholder="6",    label_visibility="collapsed")
+            y = c1.selectbox("年", YEAR_OPTIONS, key=f"lic_y{i}", label_visibility="collapsed")
+            m = c2.selectbox("月", MONTH_OPTIONS, key=f"lic_m{i}", label_visibility="collapsed")
             c = c3.text_input("内容", key=f"lic_c{i}", placeholder="普通自動車第一種運転免許 取得", label_visibility="collapsed")
             licenses.append({"year":y,"month":m,"content":c})
 
@@ -354,11 +341,20 @@ if mode == "📝 入力フォーム（ユーザー）":
             st.success("✅ 送信が完了しました！担当アドバイザーが確認します。")
             st.balloons()
 
+            # 送信完了後の確認表示
+            st.markdown("---")
+            st.subheader("📋 送信内容の確認")
+            st.markdown(f"**氏名：** {name}")
+            st.markdown(f"**メールアドレス：** {email}")
+            st.markdown(f"**職務要約：** {summary[:100]}{'...' if len(summary) > 100 else ''}")
+            st.markdown(f"**自己PR：** {pr[:100]}{'...' if len(pr) > 100 else ''}")
+
 # ══════════════════════════════════════════════════════
 # 管理者側：管理画面
 # ══════════════════════════════════════════════════════
 else:
     st.title("🔐 管理画面")
+    st.caption("⚠️ 本番利用時は管理パスワードを変更してください（st.secrets を使用）")
 
     if "admin_logged_in" not in st.session_state:
         st.session_state.admin_logged_in = False
@@ -382,11 +378,29 @@ else:
             st.info("まだ送信されたデータがありません。")
         else:
             st.subheader(f"📋 送信一覧（{len(records)}件）")
+
+            # 応募者一覧CSVダウンロード
+            csv_cols = ["id","submitted_at","name","birthday","age",
+                        "phone","email","nearest_station","summary"]
+            df_list = []
+            for r in records:
+                df_list.append({c: r.get(c,"") for c in csv_cols})
+            df_csv = pd.DataFrame(df_list, columns=csv_cols)
+            csv_bytes = df_csv.to_csv(index=False, encoding="utf-8-sig").encode("utf-8-sig")
+            st.download_button(
+                "⬇️ 応募者一覧CSVをダウンロード",
+                data=csv_bytes,
+                file_name=f"応募者一覧_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+            )
+
+            st.markdown("---")
+
             for r in reversed(records):
                 with st.expander(f"📄 {r.get('name','')}　送信日時：{r.get('submitted_at','')}"):
-                    col1,col2 = st.columns(2)
+                    col1, col2 = st.columns(2)
 
-                    # 履歴書（テンプレート流し込み）
+                    # 履歴書ダウンロード
                     try:
                         buf_r = make_rirekisho(r)
                         col1.download_button(
@@ -400,16 +414,19 @@ else:
                     except FileNotFoundError as e:
                         col1.error(str(e))
 
-                    # 職務経歴書
-                    buf_s = make_shokumu(r)
-                    col2.download_button(
-                        "⬇️ 職務経歴書.docxをダウンロード",
-                        data=buf_s,
-                        file_name=f"職務経歴書_{r.get('name','')}_{r.get('id','')}.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        key=f"s_{r.get('id','')}",
-                        use_container_width=True,
-                    )
+                    # 職務経歴書ダウンロード
+                    try:
+                        buf_s = make_shokumu(r)
+                        col2.download_button(
+                            "⬇️ 職務経歴書.docxをダウンロード",
+                            data=buf_s,
+                            file_name=f"職務経歴書_{r.get('name','')}_{r.get('id','')}.docx",
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            key=f"s_{r.get('id','')}",
+                            use_container_width=True,
+                        )
+                    except FileNotFoundError as e:
+                        col2.error(str(e))
 
                     st.markdown("---")
                     st.markdown(f"**氏名：** {r.get('name','')}　**生年月日：** {r.get('birthday','')}（{r.get('age','')}歳）")
@@ -417,3 +434,17 @@ else:
                     st.markdown(f"**電話：** {r.get('phone','')}　**メール：** {r.get('email','')}")
                     if r.get('pr'):
                         st.markdown(f"**自己PR：** {r.get('pr','')[:80]}...")
+
+                    # 削除機能
+                    st.markdown("---")
+                    del_check = st.checkbox(
+                        "このデータを削除する（チェックを入れてから削除ボタンを押してください）",
+                        key=f"del_check_{r.get('id','')}"
+                    )
+                    if del_check:
+                        if st.button("🗑️ 削除する", key=f"del_{r.get('id','')}", type="secondary"):
+                            records_new = load_data()
+                            records_new = [x for x in records_new if x.get("id") != r.get("id")]
+                            save_data(records_new)
+                            st.success(f"✅ 「{r.get('name','')}」のデータを削除しました。")
+                            st.rerun()
