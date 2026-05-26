@@ -146,9 +146,9 @@ def load_all_from_gsheet(client_id=None):
             if len(row) >= 4 and row[3]:
                 try:
                     record = json.loads(row[3])
-                    # client_idフィルタ
-                    row_client = row[4] if len(row) >= 5 else "admin"
-                    if client_id is None or row_client == client_id:
+                    # client_idフィルタ：JSONの中のclient_idで判定
+                    record_client = record.get("client_id", "admin")
+                    if client_id is None or record_client == client_id:
                         records.append(record)
                 except Exception:
                     pass
