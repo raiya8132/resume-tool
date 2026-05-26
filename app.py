@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import json
+import uuid
 from datetime import datetime
 from pathlib import Path
 from io import BytesIO
@@ -167,14 +168,8 @@ def make_shokumu(d):
             cell_content.paragraphs[0].add_run(
                 f"《業務内容》\n{c.get('job_content','')}\n\n《実績》\n{c.get('achievement','')}")
 
-    # 2社目以降：自己PRの前に挿入する（テーブル形式）
-    # 自己PRの段落（paras[17]）の前に挿入するためXMLを操作
-    from docx.oxml.ns import qn
-    from docx.oxml import OxmlElement
-    import copy
-
+    # 2社目以降：ドキュメント末尾にテーブル形式で追加する
     def add_company_block(doc, idx, c):
-        """会社ブロックをテーブル形式で追加する"""
         # 会社名見出し
         p_head = doc.add_paragraph()
         run = p_head.add_run(f"（{idx}）{c.get('company_name','')}")
@@ -290,11 +285,14 @@ if mode == "📝 入力フォーム（ユーザー）":
     st.info("🔒 入力された情報は、履歴書・職務経歴書作成の目的で使用されます。デモ利用時は架空の情報でお試しください。")
     st.markdown("---")
 
+    # 確認画面から戻ったときのデータ復元
+    _prev = st.session_state.get("preview_data", {})
+
     with st.form("resume_form"):
 
         st.subheader("① 氏名")
-        furigana_name = st.text_input("ふりがな", placeholder="やまだ たろう")
-        name = st.text_input("氏名 *", placeholder="山田 太郎")
+        furigana_name = st.text_input("ふりがな", value=_prev.get("furigana_name",""), placeholder="やまだ たろう")
+        name = st.text_input("氏名 *", value=_prev.get("name",""), placeholder="山田 太郎")
 
         st.subheader("② 生年月日")
         bd_col1, bd_col2, bd_col3 = st.columns(3)
@@ -305,15 +303,15 @@ if mode == "📝 入力フォーム（ユーザー）":
         age = st.text_input("年齢", placeholder="35")
 
         st.subheader("③ 住所")
-        postal   = st.text_input("郵便番号", placeholder="123-4567")
-        address  = st.text_area("住所", placeholder="東京都新宿区〇〇1-2-3", height=68)
-        furigana_address = st.text_input("住所ふりがな", placeholder="とうきょうとしんじゅくく〇〇")
+        postal   = st.text_input("郵便番号", value=_prev.get("postal",""), placeholder="123-4567")
+        address  = st.text_area("住所", value=_prev.get("address",""), placeholder="東京都新宿区〇〇1-2-3", height=68)
+        furigana_address = st.text_input("住所ふりがな", value=_prev.get("furigana_address",""), placeholder="とうきょうとしんじゅくく〇〇")
 
         st.subheader("④ 電話番号")
-        phone = st.text_input("電話番号", placeholder="090-1234-5678")
+        phone = st.text_input("電話番号", value=_prev.get("phone",""), placeholder="090-1234-5678")
 
         st.subheader("⑤ メールアドレス")
-        email = st.text_input("メールアドレス", placeholder="example@email.com")
+        email = st.text_input("メールアドレス", value=_prev.get("email",""), placeholder="example@email.com")
 
         # 年・月の選択肢
         YEAR_OPTIONS  = [""] + [str(y) for y in range(datetime.now().year, 1959, -1)]
@@ -333,7 +331,7 @@ if mode == "📝 入力フォーム（ユーザー）":
             c = c3.text_input("内容", key=f"edu_c{i}", placeholder="〇〇高等学校 卒業", label_visibility="collapsed")
             education.append({"year":y,"month":m,"content":c})
 
-        st.subheader("⑦ 職務経歴")
+        st.subheader("⑦ 職歴")
         career = []
         cols_h2 = st.columns([1,1,4])
         cols_h2[0].markdown("**年**")
@@ -361,23 +359,23 @@ if mode == "📝 入力フォーム（ユーザー）":
 
         st.subheader("⑨ 自己PR")
         st.caption("どんな人物か・何を意識してきたか・どんなふうに頑張れるかを書いてください")
-        pr = st.text_area("自己PR *", height=200,
+        pr = st.text_area("自己PR *", value=_prev.get("pr",""), height=200,
                           placeholder="コミュニケーションを大切にし、チームで目標達成することを意識してきました。")
 
         st.subheader("⑩ 最寄り駅")
-        nearest_station = st.text_input("最寄り駅", placeholder="〇〇線 〇〇駅")
+        nearest_station = st.text_input("最寄り駅", value=_prev.get("nearest_station",""), placeholder="〇〇線 〇〇駅")
 
         st.subheader("⑪ 家族情報")
         fc1,fc2,fc3 = st.columns(3)
-        dependents     = fc1.text_input("扶養家族（人数）", placeholder="0")
+        dependents     = fc1.text_input("扶養家族（人数）", value=_prev.get("dependents",""), placeholder="0")
         spouse         = fc2.selectbox("配偶者", ["無","有"])
         spouse_support = fc3.selectbox("配偶者の扶養義務", ["無","有"])
 
         st.markdown("---")
         st.header("📋 職務経歴書")
-        summary = st.text_area("職務要約 *", height=120,
+        summary = st.text_area("職務要約 *", value=_prev.get("summary",""), height=120,
                                placeholder="〇〇業界で△年間の経験を持ちます。")
-        skills  = st.text_area("活かせるスキル", height=100,
+        skills  = st.text_area("活かせるスキル", value=_prev.get("skills",""), height=100,
                                placeholder="・〇〇スキル\n・△△の経験")
 
         st.subheader("職務経歴（最大5社）")
@@ -468,7 +466,7 @@ if mode == "📝 入力フォーム（ユーザー）":
 
         if col_submit.button("✅ このまま送信する", type="primary", use_container_width=True):
             record = {
-                "id": datetime.now().strftime("%Y%m%d%H%M%S"),
+                "id": datetime.now().strftime("%Y%m%d%H%M%S") + "_" + uuid.uuid4().hex[:8],
                 "submitted_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 **d,
             }
@@ -485,7 +483,6 @@ if mode == "📝 入力フォーム（ユーザー）":
 # ══════════════════════════════════════════════════════
 else:
     st.title("🔐 管理画面")
-    st.caption("⚠️ 本番利用時は管理パスワードを変更してください（st.secrets を使用）")
 
     if "admin_logged_in" not in st.session_state:
         st.session_state.admin_logged_in = False
@@ -499,6 +496,7 @@ else:
             else:
                 st.error("❌ パスワードが違います")
     else:
+        st.caption("⚠️ 本番利用時は管理パスワードを変更してください（st.secrets を使用）")
         st.success("✅ ログイン中")
         if st.button("ログアウト"):
             st.session_state.admin_logged_in = False
