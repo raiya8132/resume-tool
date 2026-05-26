@@ -28,9 +28,6 @@ except Exception:
         "admin": "admin1234",
     }
 
-def get_admin_pass():
-    return "admin1234"
-
 # ── Google Sheets接続 ──────────────────────────────────
 def get_gsheet():
     try:
@@ -81,33 +78,6 @@ def save_to_gsheet(record):
         return True
     except Exception as e:
         return False
-
-TEMPLATE_FILE    = Path("rirekisho_template.docx")
-SHOKUMU_TEMPLATE = Path("shokumu_template.docx")
-MAX_COMPANIES    = 5
-
-# クライアントごとのパスワード設定
-# st.secretsに設定がなければデモ用パスワードを使用
-try:
-    CLIENT_PASSWORDS = dict(st.secrets["client_passwords"])
-except Exception:
-    CLIENT_PASSWORDS = {
-        "admin": "admin1234",
-    }
-
-def get_admin_pass():
-    return "admin1234"
-
-def load_from_gsheet():
-    try:
-        sheet = get_gsheet()
-        if sheet is None:
-            return []
-        rows = sheet.get_all_records()
-        # スプレッドシートの基本情報だけなので、ローカルと統合
-        return rows
-    except Exception:
-        return []
 
 def save_to_gsheet_full(record):
     """全データをJSONとしてスプレッドシートに保存"""
@@ -535,12 +505,14 @@ if mode == "📝 入力フォーム（ユーザー）":
             records = load_data()
             records.append(record)
             save_data(records)
-            save_to_gsheet_full(record)
+            gsheet_ok = save_to_gsheet_full(record)
             st.session_state["show_preview"] = False
             st.session_state.pop("preview_data", None)
             st.session_state.pop("draft_data", None)
             st.session_state.pop("photo_b64", None)
             st.success("✅ 送信が完了しました！担当アドバイザーが確認します。")
+            if not gsheet_ok:
+                st.warning("⚠️ データは保存されましたが、クラウド同期に失敗しました。管理者にお知らせください。")
             st.balloons()
         st.stop()
 
@@ -560,9 +532,12 @@ if mode == "📝 入力フォーム（ユーザー）":
         photo_file = st.file_uploader("証明写真をアップロード（jpg/png）", type=["jpg","jpeg","png"])
         if photo_file:
             photo_bytes = photo_file.read()
-            photo_b64 = base64.b64encode(photo_bytes).decode("utf-8")
-            st.session_state["photo_b64"] = photo_b64
-            st.image(BytesIO(photo_bytes), width=120, caption="アップロードされた写真")
+            if len(photo_bytes) > 5 * 1024 * 1024:
+                st.error("❌ 画像ファイルが5MBを超えています。5MB以下の画像をアップロードしてください。")
+            else:
+                photo_b64 = base64.b64encode(photo_bytes).decode("utf-8")
+                st.session_state["photo_b64"] = photo_b64
+                st.image(BytesIO(photo_bytes), width=120, caption="アップロードされた写真")
         elif _prev.get("photo_b64"):
             st.info("写真はアップロード済みです ✅")
             img_data = base64.b64decode(_prev.get("photo_b64"))
@@ -739,10 +714,18 @@ if mode == "📝 入力フォーム（ユーザー）":
         if not name.strip():    errors.append("氏名を入力してください。")
         if not pr.strip():      errors.append("自己PRを入力してください。")
         if not summary.strip(): errors.append("職務要約を入力してください。")
-        if email.strip() and ("@" not in email or "." not in email):
-            errors.append("メールアドレスの形式が正しくありません（@ と . を含めてください）。")
-        if phone.strip() and not all(c.isdigit() or c == "-" for c in phone.strip()):
-            errors.append("電話番号は数字とハイフン（-）のみ入力してください。")
+        import re as _re
+        if email.strip():
+            email_pattern = _re.compile(r'^[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}$')
+            if not email_pattern.match(email.strip()):
+                errors.append("メールアドレスの形式が正しくありません（例：example@email.com）。")
+        if phone.strip():
+            if not all(c.isdigit() or c == "-" for c in phone.strip()):
+                errors.append("電話番号は数字とハイフン（-）のみ入力してください。")
+            else:
+                digits_only = phone.strip().replace("-", "")
+                if not (10 <= len(digits_only) <= 11):
+                    errors.append("電話番号は10〜11桁で入力してください（例：090-1234-5678）。")
         if errors:
             for e in errors:
                 st.error(f"❌ {e}")
@@ -821,6 +804,10 @@ else:
             st.info("まだ送信されたデータがありません。")
         else:
             st.subheader(f"📋 送信一覧（{len(records)}件）")
+            search_name = st.text_input("🔍 氏名で検索", placeholder="例：山田")
+            if search_name:
+                records = [r for r in records if search_name in r.get("name", "")]
+                st.caption(f"「{search_name}」の検索結果：{len(records)}件")
 
             # 応募者一覧CSVダウンロード
             csv_cols = ["id","submitted_at","name","birthday","age",
