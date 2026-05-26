@@ -92,11 +92,13 @@ def save_to_gsheet_full(record):
             header_val = None
         if not header_val:
             sheet.append_row(["id", "submitted_at", "name", "json_data", "client_id"])
+        # photo_b64はセルサイズ超過のため除外してから保存
+        record_for_sheet = {k: v for k, v in record.items() if k != "photo_b64"}
         row = [
             record.get("id", ""),
             record.get("submitted_at", ""),
             record.get("name", ""),
-            json.dumps(record, ensure_ascii=False),
+            json.dumps(record_for_sheet, ensure_ascii=False),
             record.get("client_id", "admin"),
         ]
         sheet.append_row(row)
@@ -356,9 +358,12 @@ def make_shokumu(d):
         )
 
     for i, c in enumerate(companies[1:], start=2):
-        if not c.get("company_name"):
+        try:
+            if not (isinstance(c, dict) and c.get("company_name")):
+                continue
+            add_company_block(doc, i, c)
+        except Exception:
             continue
-        add_company_block(doc, i, c)
 
     # 自己PRを最後に追加
     p_pr_head = doc.add_paragraph()
