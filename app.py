@@ -333,7 +333,7 @@ if mode == "📝 入力フォーム（ユーザー）":
             c = c3.text_input("内容", key=f"edu_c{i}", placeholder="〇〇高等学校 卒業", label_visibility="collapsed")
             education.append({"year":y,"month":m,"content":c})
 
-        st.subheader("⑦ 職歴")
+        st.subheader("⑦ 職務経歴")
         career = []
         cols_h2 = st.columns([1,1,4])
         cols_h2[0].markdown("**年**")
