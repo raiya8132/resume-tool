@@ -60,6 +60,7 @@ def make_rirekisho(d):
     t0 = doc.tables[0]
     set_cell(t0.rows[0].cells[1], d.get("furigana_name",""))
     set_cell(t0.rows[1].cells[1], d.get("name",""))
+    set_cell(t0.rows[1].cells[3], d.get("gender",""))
     set_cell(t0.rows[2].cells[1], f"{d.get('birthday','')}（満{d.get('age','')}歳）")
     set_cell(t0.rows[3].cells[1], d.get("furigana_address",""))
     set_cell(t0.rows[4].cells[1], f"〒{d.get('postal','')}　{d.get('address','')}")
@@ -168,6 +169,14 @@ def make_shokumu(d):
             cell_content.paragraphs[0].add_run(
                 f"《業務内容》\n{c.get('job_content','')}\n\n《実績》\n{c.get('achievement','')}")
 
+    # テンプレート内の「自己PR」「以上」段落を削除
+    paras_to_remove = []
+    for p in doc.paragraphs:
+        if p.text.strip() in ["自己PR", "以上"]:
+            paras_to_remove.append(p)
+    for p in paras_to_remove:
+        p._element.getparent().remove(p._element)
+
     # 2社目以降：ドキュメント末尾にテーブル形式で追加する
     def add_company_block(doc, idx, c):
         # 会社名見出し
@@ -223,7 +232,7 @@ def make_shokumu(d):
 # ── プレビュー表示関数 ────────────────────────────────
 def show_preview(d):
     """応募者データをプレビュー表示する"""
-    st.markdown(f"**【氏名】** {d.get('furigana_name','')} / {d.get('name','')}")
+    st.markdown(f"**【氏名】** {d.get('furigana_name','')} / {d.get('name','')}　**【性別】** {d.get('gender','')}")
     st.markdown(f"**【生年月日】** {d.get('birthday','')}（{d.get('age','')}歳）")
     st.markdown(f"**【住所】** 〒{d.get('postal','')}　{d.get('address','')}　（{d.get('furigana_address','')}）")
     st.markdown(f"**【電話】** {d.get('phone','')}　**【メール】** {d.get('email','')}")
@@ -332,6 +341,8 @@ if mode == "📝 入力フォーム（ユーザー）":
         st.subheader("① 氏名")
         furigana_name = st.text_input("ふりがな", value=_prev.get("furigana_name",""), placeholder="やまだ たろう")
         name = st.text_input("氏名 *", value=_prev.get("name",""), placeholder="山田 太郎")
+        GENDER_OPT = ["", "男", "女"]
+        gender = st.selectbox("性別", GENDER_OPT, index=get_index(GENDER_OPT, _prev.get("gender","")))
 
         st.subheader("② 生年月日")
         bd_col1, bd_col2, bd_col3 = st.columns(3)
@@ -515,6 +526,7 @@ if mode == "📝 入力フォーム（ユーザー）":
             # session_stateに一時保存して確認画面へ
             st.session_state["preview_data"] = {
                 "name":name,"furigana_name":furigana_name,
+                "gender":gender,
                 "birthday":birthday,"age":age,
                 "postal":postal,"address":address,"furigana_address":furigana_address,
                 "phone":phone,"email":email,
