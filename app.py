@@ -7,9 +7,73 @@ from pathlib import Path
 from io import BytesIO
 from docx import Document
 from docx.shared import Pt
+import gspread
+from google.oauth2.service_account import Credentials
 
 # ── 設定 ──────────────────────────────────────────────
 DATA_FILE        = Path("data/submissions.json")
+TEMPLATE_FILE    = Path("rirekisho_template.docx")
+SHOKUMU_TEMPLATE = Path("shokumu_template.docx")
+MAX_COMPANIES    = 5
+SPREADSHEET_ID   = "1hhVNfpIHcNW-rjxcxVsD14QAPair4IIa5FYK6U9Ny_k"
+
+# パスワード：st.secrets があれば使い、なければデモ用
+try:
+    ADMIN_PASS = st.secrets["ADMIN_PASS"]
+except Exception:
+    ADMIN_PASS = "admin1234"
+
+# ── Google Sheets接続 ──────────────────────────────────
+def get_gsheet():
+    try:
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
+        ]
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+        client = gspread.authorize(creds)
+        sheet = client.open_by_key(SPREADSHEET_ID).sheet1
+        return sheet
+    except Exception as e:
+        return None
+
+def save_to_gsheet(record):
+    try:
+        sheet = get_gsheet()
+        if sheet is None:
+            return False
+        # ヘッダーがなければ追加
+        if sheet.row_count == 0 or sheet.cell(1, 1).value is None:
+            headers = ["id","submitted_at","name","furigana_name","gender","birthday","age",
+                      "postal","address","phone","email","nearest_station",
+                      "dependents","spouse","spouse_support","summary","skills","pr"]
+            sheet.append_row(headers)
+        row = [
+            record.get("id",""),
+            record.get("submitted_at",""),
+            record.get("name",""),
+            record.get("furigana_name",""),
+            record.get("gender",""),
+            record.get("birthday",""),
+            record.get("age",""),
+            record.get("postal",""),
+            record.get("address",""),
+            record.get("phone",""),
+            record.get("email",""),
+            record.get("nearest_station",""),
+            record.get("dependents",""),
+            record.get("spouse",""),
+            record.get("spouse_support",""),
+            record.get("summary",""),
+            record.get("skills",""),
+            record.get("pr",""),
+        ]
+        sheet.append_row(row)
+        return True
+    except Exception as e:
+        return False
+
 TEMPLATE_FILE    = Path("rirekisho_template.docx")
 SHOKUMU_TEMPLATE = Path("shokumu_template.docx")
 MAX_COMPANIES    = 5
@@ -561,6 +625,7 @@ if mode == "📝 入力フォーム（ユーザー）":
             records = load_data()
             records.append(record)
             save_data(records)
+            save_to_gsheet(record)
             st.session_state["show_preview"] = False
             st.session_state.pop("preview_data", None)
             st.success("✅ 送信が完了しました！担当アドバイザーが確認します。")
