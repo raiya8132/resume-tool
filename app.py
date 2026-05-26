@@ -134,10 +134,10 @@ def make_shokumu(d):
     set_run(paras[3], f"氏名　{d.get('name','')}")
     set_run(paras[5], d.get("summary",""))
     set_run(paras[7], d.get("skills",""))
-    if len(paras) > 18:
-        set_run(paras[18], d.get("pr",""))
 
     companies = d.get("companies", [])
+
+    # 1社目：テンプレートのテーブルに流し込む
     if companies:
         c = companies[0]
         set_run(paras[9],  f"（１）{c.get('company_name','')}")
@@ -167,16 +167,55 @@ def make_shokumu(d):
             cell_content.paragraphs[0].add_run(
                 f"《業務内容》\n{c.get('job_content','')}\n\n《実績》\n{c.get('achievement','')}")
 
+    # 2社目以降：自己PRの前に挿入する（テーブル形式）
+    # 自己PRの段落（paras[17]）の前に挿入するためXMLを操作
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+    import copy
+
+    def add_company_block(doc, idx, c):
+        """会社ブロックをテーブル形式で追加する"""
+        # 会社名見出し
+        p_head = doc.add_paragraph()
+        run = p_head.add_run(f"（{idx}）{c.get('company_name','')}")
+        run.bold = True
+        run.font.size = Pt(10.5)
+
+        # 会社情報
+        doc.add_paragraph(f"・事業内容：{c.get('business','')}")
+        doc.add_paragraph(f"・資本金：{c.get('capital','')}万円")
+        doc.add_paragraph(f"・従業員数：{c.get('employees','')}名")
+
+        # テーブル作成
+        tbl = doc.add_table(rows=3, cols=2)
+        tbl.style = "Table Grid"
+
+        # ヘッダー行
+        tbl.rows[0].cells[0].text = "期間"
+        tbl.rows[0].cells[1].text = "業務内容"
+
+        # 期間・雇用形態
+        tbl.rows[1].cells[0].text = f"{c.get('period_start','')} ～ {c.get('period_end','')}"
+        tbl.rows[1].cells[1].text = f"雇用形態：{c.get('employment_type','正社員')}　配属先：{c.get('department','')}"
+
+        # 業務内容・実績
+        tbl.rows[2].cells[0].text = ""
+        tbl.rows[2].cells[1].text = (
+            f"《業務内容》\n{c.get('job_content','')}\n\n《実績》\n{c.get('achievement','')}"
+        )
+
     for i, c in enumerate(companies[1:], start=2):
         if not c.get("company_name"):
             continue
-        add_bold(f"（{i}）{c.get('company_name','')}")
-        add_normal(f"・事業内容：{c.get('business','')}")
-        add_normal(f"・資本金：{c.get('capital','')}万円")
-        add_normal(f"・従業員数：{c.get('employees','')}名")
-        add_normal(f"・雇用形態：{c.get('employment_type','正社員')}　配属先：{c.get('department','')}")
-        add_normal(f"《業務内容》\n{c.get('job_content','')}")
-        add_normal(f"《実績》\n{c.get('achievement','')}")
+        add_company_block(doc, i, c)
+
+    # 自己PRを最後に追加
+    p_pr_head = doc.add_paragraph()
+    run = p_pr_head.add_run("自己PR")
+    run.bold = True
+    run.font.size = Pt(10.5)
+    doc.add_paragraph(d.get("pr",""))
+    doc.add_paragraph("以上")
 
     out = BytesIO()
     doc.save(out)
