@@ -11,8 +11,6 @@ from PIL import Image
 import base64
 import gspread
 from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
 
 # ── 設定 ──────────────────────────────────────────────
 DATA_FILE        = Path("data/submissions.json")
@@ -49,68 +47,6 @@ def get_gsheet():
         return None
 
 
-
-DRIVE_FOLDER_ID = None  # 共有フォルダIDはsecretsから取得（任意）
-
-def get_drive_service():
-    """Google Drive APIサービスを取得"""
-    try:
-        creds_dict = dict(st.secrets["gcp_service_account"])
-        scopes = [
-            "https://www.googleapis.com/auth/drive",
-            "https://www.googleapis.com/auth/spreadsheets",
-        ]
-        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-        service = build("drive", "v3", credentials=creds)
-        return service
-    except Exception:
-        return None
-
-def upload_photo_to_drive(photo_bytes, filename):
-    """写真をGoogle Driveにアップロードしてfile_idを返す"""
-    try:
-        service = get_drive_service()
-        if service is None:
-            return None
-        file_metadata = {"name": filename}
-        try:
-            folder_id = st.secrets["DRIVE_FOLDER_ID"]
-            file_metadata["parents"] = [folder_id]
-        except Exception:
-            pass
-        media = MediaIoBaseUpload(BytesIO(photo_bytes), mimetype="image/jpeg")
-        file = service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields="id"
-        ).execute()
-        file_id = file.get("id")
-        # 閲覧権限を付与
-        service.permissions().create(
-            fileId=file_id,
-            body={"type": "anyone", "role": "reader"}
-        ).execute()
-        return file_id
-    except Exception:
-        return None
-
-def download_photo_from_drive(file_id):
-    """Google DriveからファイルIDで画像をダウンロードしてbytesを返す"""
-    try:
-        service = get_drive_service()
-        if service is None:
-            return None
-        request = service.files().get_media(fileId=file_id)
-        buf = BytesIO()
-        from googleapiclient.http import MediaIoBaseDownload
-        downloader = MediaIoBaseDownload(buf, request)
-        done = False
-        while not done:
-            _, done = downloader.next_chunk()
-        buf.seek(0)
-        return buf.read()
-    except Exception:
-        return None
 
 def save_to_gsheet_full(record):
     """全データをJSONとしてスプレッドシートに保存"""
@@ -284,17 +220,22 @@ def make_rirekisho(d):
     set_cell(t4.rows[1].cells[0], d.get("pr",""))
 
     # 証明写真の挿入
-    # 優先順位: 1.photo_b64(Base64) 2.photo_file_id(Google Drive) 3.なし
+    # 優先順位: 1.record内のphoto_b64 2.ローカルJSONから取得 3.session_state 4.なし
     photo_bytes_for_doc = None
     photo_b64 = d.get("photo_b64") or st.session_state.get("photo_b64")
+    if not photo_b64 and d.get("id"):
+        # ローカルJSONから写真を取得
+        try:
+            local_records = load_data()
+            for lr in local_records:
+                if lr.get("id") == d.get("id") and lr.get("photo_b64"):
+                    photo_b64 = lr["photo_b64"]
+                    break
+        except Exception:
+            pass
     if photo_b64:
         try:
             photo_bytes_for_doc = base64.b64decode(photo_b64)
-        except Exception:
-            pass
-    if not photo_bytes_for_doc and d.get("photo_file_id"):
-        try:
-            photo_bytes_for_doc = download_photo_from_drive(d["photo_file_id"])
         except Exception:
             pass
     if photo_bytes_for_doc:
@@ -595,21 +536,10 @@ if mode == "📝 入力フォーム（ユーザー）":
                 "submitted_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 **d,
             }
-            # 写真をGoogle Driveにアップロード
+            # 写真はローカルJSONに保存（photo_b64をrecordに含める）
             photo_b64 = st.session_state.get("photo_b64", d.get("photo_b64",""))
-            photo_file_id = None
             if photo_b64:
-                try:
-                    photo_bytes_raw = base64.b64decode(photo_b64)
-                    fname = f"photo_{record['id']}.jpg"
-                    photo_file_id = upload_photo_to_drive(photo_bytes_raw, fname)
-                    if photo_file_id:
-                        record["photo_file_id"] = photo_file_id
-                        record.pop("photo_b64", None)
-                    else:
-                        st.warning("⚠️ 証明写真のクラウド保存に失敗しました。写真なしで保存します。")
-                except Exception:
-                    st.warning("⚠️ 証明写真のクラウド保存に失敗しました。写真なしで保存します。")
+                record["photo_b64"] = photo_b64
 
             records = load_data()
             records.append(record)
