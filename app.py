@@ -156,6 +156,69 @@ PR_TEMPLATES = {
     "未経験転職向け": "これまで〇〇の業界で勤務してきましたが、〇〇職への強い関心から転職を決意しました。未経験ではありますが、前職で培ったコミュニケーション力や課題解決力は必ず活かせると考えています。入社後は早期に戦力となれるよう、積極的に知識・スキルを吸収する姿勢で取り組みます。貴社の一員として誠実に働き、長期的に貢献していきたいと考えております。",
     "アルバイト経験向け": "学業と並行して〇〇のアルバイトに取り組み、責任感を持って業務に従事してきました。シフト管理や後輩スタッフへの指導なども経験し、チームで協力して目標を達成する大切さを学びました。社会人としての基本的なビジネスマナーや、迅速な状況判断力が身についています。貴社でも積極的に仕事を覚え、即戦力として貢献できるよう努力します。",
 }
+# ── 自己PR生成ルールベース ──────────────────────────────
+KEYWORD_SENTENCES = {
+    "正確性":     "正確性を意識しながら、丁寧に業務へ取り組むことができます。",
+    "コミュニケーション": "相手の意図を汲み取り、円滑なコミュニケーションを大切にしてきました。",
+    "継続力":     "一度決めたことを継続し、地道に努力を積み重ねることができます。",
+    "課題解決":   "課題に対して原因を整理し、改善に向けて行動することができます。",
+    "責任感":     "任された業務に責任を持ち、最後までやり遂げる姿勢を大切にしています。",
+    "チームワーク": "チームメンバーと連携しながら、協力して目標を達成することが得意です。",
+    "柔軟性":     "状況に応じて柔軟に対応し、変化にも前向きに取り組むことができます。",
+    "学習意欲":   "新しい知識やスキルを積極的に習得し、自己成長を大切にしています。",
+    "リーダーシップ": "チームをまとめ、目標達成に向けて率先して行動することができます。",
+    "誠実さ":     "誠実に業務に向き合い、周囲からの信頼を大切にしてきました。",
+    "効率化":     "業務の無駄を見つけ、より効率的な方法を考えながら取り組んできました。",
+    "傾聴力":     "相手の話をしっかりと聞き、ニーズを把握した上で行動することができます。",
+}
+
+TONE_INTROS = {
+    "丁寧":       "これまでの経験を通じて、",
+    "前向き":     "挑戦を大切にしながら、",
+    "落ち着いた": "着実に経験を積み重ねる中で、",
+    "未経験向け": "異業種からの転職ではありますが、",
+}
+
+CLOSING_SENTENCES = {
+    "事務職":     "今後も、正確で円滑な業務運営に貢献していきたいと考えております。",
+    "営業職":     "今後も、お客様との信頼関係を大切にしながら、目標達成に貢献していきたいと考えております。",
+    "エンジニア": "今後も、技術力を高めながら、安定したシステム運用や業務改善に貢献していきたいと考えております。",
+    "販売・接客": "今後も、お客様に安心感を持っていただける対応を心がけ、満足度向上に貢献していきたいと考えております。",
+    "未経験転職": "今後も、新しい知識を積極的に学びながら、早期に戦力となれるよう努力していきたいと考えております。",
+    "その他":     "今後も、自身の強みを活かしながら、組織に貢献していきたいと考えております。",
+}
+
+def generate_pr_text(job_type, keywords_str, episode, tone):
+    """ルールベースで自己PR文を生成する"""
+    parts = []
+    # イントロ
+    intro = TONE_INTROS.get(tone, "これまでの経験を通じて、")
+    # エピソードがあれば冒頭に追加
+    if episode.strip():
+        parts.append(f"{intro}{episode.strip()}。")
+    else:
+        parts.append(f"{intro}以下の点を強みとして培ってきました。")
+    # キーワードを分解してマッチング
+    import re as _re
+    keywords = [k.strip() for k in _re.split(r'[,、 　]+', keywords_str) if k.strip()]
+    matched = []
+    for kw in keywords:
+        for key, sentence in KEYWORD_SENTENCES.items():
+            if key in kw or kw in key:
+                if sentence not in matched:
+                    matched.append(sentence)
+                break
+        else:
+            # キーワードがマッチしなくても文章として追加
+            if kw:
+                matched.append(f"{kw}を活かして業務に取り組むことができます。")
+    parts.extend(matched)
+    # 締め文
+    closing = CLOSING_SENTENCES.get(job_type, CLOSING_SENTENCES["その他"])
+    parts.append(closing)
+    return "\n".join(parts)
+
+
 st.set_page_config(page_title="経歴入力フォーム", page_icon="📄", layout="centered")
 
 # ── データ保存・読み込み ──────────────────────────────
@@ -689,7 +752,33 @@ if mode == "📝 入力フォーム（ユーザー）":
 
         st.subheader("⑨ 自己PR")
         st.caption("どんな人物か・何を意識してきたか・どんなふうに頑張れるかを書いてください")
-        # テンプレート選択
+
+        with st.expander("✨ 自己PR作成サポート（入力ヒント）", expanded=False):
+            gen_job = st.selectbox(
+                "希望職種",
+                ["選択してください","事務職","営業職","エンジニア","販売・接客","未経験転職","その他"],
+                key="gen_job"
+            )
+            gen_keywords = st.text_input(
+                "アピールしたいキーワード",
+                key="gen_keywords",
+                placeholder="例：正確性、コミュニケーション、継続力、課題解決、責任感"
+            )
+            gen_episode = st.text_area(
+                "経験・エピソード（任意）",
+                key="gen_episode",
+                height=80,
+                placeholder="例：前職でデータ入力や電話対応を担当していました"
+            )
+            gen_tone = st.selectbox(
+                "文章トーン",
+                ["丁寧","前向き","落ち着いた","未経験向け"],
+                key="gen_tone"
+            )
+            apply_generated = st.form_submit_button("✨ 自己PR文を作成する")
+            st.caption("⚠️ 生成された文章は下書きです。ご自身の経験に合わせて編集してください。")
+
+        # 職種別テンプレート選択
         template_options = ["選択してください"] + list(PR_TEMPLATES.keys())
         selected_template = st.selectbox(
             "📝 職種別テンプレートを選択",
@@ -698,6 +787,7 @@ if mode == "📝 入力フォーム（ユーザー）":
         )
         apply_template = st.form_submit_button("テンプレートを反映する")
         st.caption("※ テンプレートはそのまま使わず、ご自身の経験に合わせて編集してください。")
+
         # PR初期値の決定
         _pr_default = _prev.get("pr","")
         if not _pr_default and st.session_state.get("pr_template_text"):
@@ -780,6 +870,19 @@ if mode == "📝 入力フォーム（ユーザー）":
 
         st.markdown("---")
         submitted = st.form_submit_button("📋 内容を確認する", type="primary", use_container_width=True)
+
+    if apply_generated:
+        if gen_job != "選択してください" or gen_keywords.strip() or gen_episode.strip():
+            generated_pr = generate_pr_text(
+                gen_job if gen_job != "選択してください" else "その他",
+                gen_keywords,
+                gen_episode,
+                gen_tone
+            )
+            st.session_state["pr_template_text"] = generated_pr
+            st.rerun()
+        else:
+            st.warning("希望職種またはキーワードを入力してください。")
 
     if apply_template:
         if selected_template != "選択してください":
