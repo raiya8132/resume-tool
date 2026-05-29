@@ -576,20 +576,6 @@ if mode == "📝 入力フォーム（ユーザー）":
     st.info("🔒 入力された情報は、履歴書・職務経歴書作成の目的で使用されます。デモ利用時は架空の情報でお試しください。")
     st.markdown("---")
 
-    # ── 自己PRテンプレート選択（フォーム外） ──
-    with st.expander("📝 自己PRテンプレートを使う（任意）", expanded=False):
-        template_options = ["選択してください"] + list(PR_TEMPLATES.keys())
-        selected_template = st.selectbox(
-            "職種を選んでください",
-            template_options,
-            key="pr_template_select"
-        )
-        if st.button("テンプレートを反映する"):
-            if selected_template != "選択してください":
-                st.session_state["pr_template_text"] = PR_TEMPLATES[selected_template]
-                st.rerun()
-        st.caption("※ テンプレートはそのまま使うのではなく、ご自身の経験に合わせて編集してください。")
-
     with st.form("resume_form"):
 
         st.subheader("① 氏名")
@@ -703,6 +689,16 @@ if mode == "📝 入力フォーム（ユーザー）":
 
         st.subheader("⑨ 自己PR")
         st.caption("どんな人物か・何を意識してきたか・どんなふうに頑張れるかを書いてください")
+        # テンプレート選択
+        template_options = ["選択してください"] + list(PR_TEMPLATES.keys())
+        selected_template = st.selectbox(
+            "📝 職種別テンプレートを選択",
+            template_options,
+            key="pr_template_select"
+        )
+        apply_template = st.form_submit_button("テンプレートを反映する")
+        st.caption("※ テンプレートはそのまま使わず、ご自身の経験に合わせて編集してください。")
+        # PR初期値の決定
         _pr_default = _prev.get("pr","")
         if not _pr_default and st.session_state.get("pr_template_text"):
             _pr_default = st.session_state.get("pr_template_text","")
@@ -784,6 +780,11 @@ if mode == "📝 入力フォーム（ユーザー）":
 
         st.markdown("---")
         submitted = st.form_submit_button("📋 内容を確認する", type="primary", use_container_width=True)
+
+    if apply_template:
+        if selected_template != "選択してください":
+            st.session_state["pr_template_text"] = PR_TEMPLATES[selected_template]
+            st.rerun()
 
     if submitted:
         errors = []
