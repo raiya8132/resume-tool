@@ -61,10 +61,8 @@ def save_to_gsheet_full(record):
             header_val = None
         if not header_val:
             sheet.append_row(["id", "submitted_at", "name", "json_data", "client_id"])
-        # photo_b64 はBase64エンコードのため非常に大きく、
-        # Google Sheetsのセルサイズ上限（約50,000文字）を超えるため保存対象から除外。
-        # 証明写真はセッション中のみ保持され、docx生成時に使用される。
-        record_for_sheet = {k: v for k, v in record.items() if k != "photo_b64"}
+        # photo_b64は圧縮済み（40,000文字未満）のためGoogle Sheetsに保存可能
+        record_for_sheet = record.copy()
         row = [
             record.get("id", ""),
             record.get("submitted_at", ""),
@@ -115,6 +113,35 @@ def delete_from_gsheet(record_id):
         return False
     except Exception:
         return False
+
+def compress_photo_to_b64(photo_bytes):
+    """写真を圧縮してBase64文字列を返す（40,000文字未満）"""
+    img = Image.open(BytesIO(photo_bytes)).convert("RGB")
+    # 3:4比率に中央トリミング
+    w, h = img.size
+    target_ratio = 3 / 4
+    current_ratio = w / h
+    if current_ratio > target_ratio:
+        new_w = int(h * target_ratio)
+        left = (w - new_w) // 2
+        img = img.crop((left, 0, left + new_w, h))
+    else:
+        new_h = int(w / target_ratio)
+        top = (h - new_h) // 2
+        img = img.crop((0, top, w, top + new_h))
+    # サイズ・品質を調整してBase64が40,000文字未満になるようにする
+    for size in [(300, 400), (240, 320), (180, 240)]:
+        for quality in [85, 70, 55, 40]:
+            resized = img.resize(size, Image.LANCZOS)
+            buf = BytesIO()
+            resized.save(buf, format="JPEG", quality=quality)
+            b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+            if len(b64) < 40000:
+                return b64
+    # 最終フォールバック
+    buf = BytesIO()
+    img.resize((120, 160), Image.LANCZOS).save(buf, format="JPEG", quality=30)
+    return base64.b64encode(buf.getvalue()).decode("utf-8")
 
 st.set_page_config(page_title="経歴入力フォーム", page_icon="📄", layout="centered")
 
@@ -574,7 +601,7 @@ if mode == "📝 入力フォーム（ユーザー）":
             if len(photo_bytes) > 5 * 1024 * 1024:
                 st.error("❌ 画像ファイルが5MBを超えています。5MB以下の画像をアップロードしてください。")
             else:
-                photo_b64 = base64.b64encode(photo_bytes).decode("utf-8")
+                photo_b64 = compress_photo_to_b64(photo_bytes)
                 st.session_state["photo_b64"] = photo_b64
                 st.image(BytesIO(photo_bytes), width=120, caption="アップロードされた写真")
         elif _prev.get("photo_b64"):
