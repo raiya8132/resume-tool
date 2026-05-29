@@ -604,6 +604,7 @@ if mode == "📝 入力フォーム（ユーザー）":
             st.session_state.pop("draft_data", None)
             st.session_state.pop("photo_b64", None)
             st.session_state.pop("pr_template_text", None)
+            st.session_state.pop("pr_text_area", None)
             st.success("✅ 送信が完了しました！担当アドバイザーが確認します。")
             if not gsheet_ok:
                 st.warning("⚠️ データは保存されましたが、クラウド同期に失敗しました。管理者にお知らせください。")
@@ -753,12 +754,13 @@ if mode == "📝 入力フォーム（ユーザー）":
             apply_generated = st.form_submit_button("✨ 自己PR文を作成する")
             st.caption("⚠️ 生成された文章は下書きです。ご自身の経験に合わせて編集してください。")
 
-        # PR初期値の決定
-        # テンプレート反映フラグがある場合は強制的にテンプレートを使う
-        _pr_default = _prev.get("pr","")
-        if st.session_state.get("pr_template_text"):
-            _pr_default = st.session_state.get("pr_template_text","")
-        pr = st.text_area("自己PR *", value=_pr_default, height=200,
+        # PR初期値の決定（セッションキーで管理）
+        if "pr_text_area" not in st.session_state:
+            _pr_default = _prev.get("pr","")
+            if _pr_default:
+                st.session_state["pr_text_area"] = _pr_default
+        pr = st.text_area("自己PR *", height=200,
+                          key="pr_text_area",
                           placeholder="コミュニケーションを大切にし、チームで目標達成することを意識してきました。")
 
         st.subheader("⑩ 最寄り駅")
@@ -845,8 +847,7 @@ if mode == "📝 入力フォーム（ユーザー）":
                 gen_episode,
                 gen_tone
             )
-            st.session_state["pr_template_text"] = generated_pr
-            st.session_state["pr_template_applied"] = True
+            st.session_state["pr_text_area"] = generated_pr
             st.rerun()
         else:
             st.warning("希望職種またはキーワードを入力してください。")
