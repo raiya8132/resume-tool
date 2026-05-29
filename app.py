@@ -630,43 +630,6 @@ if mode == "📝 入力フォーム（ユーザー）":
     st.info("🔒 入力された情報は、履歴書・職務経歴書作成の目的で使用されます。デモ利用時は架空の情報でお試しください。")
     st.markdown("---")
 
-    # ✨ 自己PR作成サポート（フォーム外）
-    with st.expander("✨ 自己PR作成サポート（下の自己PR欄に反映されます）", expanded=False):
-        gen_job = st.selectbox(
-            "希望職種",
-            ["選択してください","事務職","営業職","エンジニア","販売・接客","未経験転職","その他"],
-            key="gen_job"
-        )
-        gen_keywords = st.text_input(
-            "アピールしたいキーワード",
-            key="gen_keywords",
-            placeholder="例：正確性、コミュニケーション、継続力、課題解決、責任感"
-        )
-        gen_episode = st.text_area(
-            "経験・エピソード（任意）",
-            key="gen_episode",
-            height=80,
-            placeholder="例：前職でデータ入力や電話対応を担当していました"
-        )
-        gen_tone = st.selectbox(
-            "文章トーン",
-            ["丁寧","前向き","落ち着いた","未経験向け"],
-            key="gen_tone"
-        )
-        if st.button("✨ 自己PR文を作成する"):
-            if gen_job != "選択してください" or gen_keywords.strip() or gen_episode.strip():
-                generated_pr = generate_pr_text(
-                    gen_job if gen_job != "選択してください" else "その他",
-                    gen_keywords,
-                    gen_episode,
-                    gen_tone
-                )
-                st.session_state["pr_text_area"] = generated_pr
-                st.rerun()
-            else:
-                st.warning("希望職種またはキーワードを入力してください。")
-        st.caption("⚠️ 生成された文章は下書きです。ご自身の経験に合わせて編集してください。")
-
     with st.form("resume_form"):
 
         st.subheader("① 氏名")
@@ -780,6 +743,32 @@ if mode == "📝 入力フォーム（ユーザー）":
 
         st.subheader("⑨ 自己PR")
         st.caption("どんな人物か・何を意識してきたか・どんなふうに頑張れるかを書いてください")
+
+        with st.expander("✨ 自己PR作成サポート", expanded=False):
+            gen_job = st.selectbox(
+                "希望職種",
+                ["選択してください","事務職","営業職","エンジニア","販売・接客","未経験転職","その他"],
+                key="gen_job"
+            )
+            gen_keywords = st.text_input(
+                "アピールしたいキーワード",
+                key="gen_keywords",
+                placeholder="例：正確性、コミュニケーション、継続力、課題解決、責任感"
+            )
+            gen_episode = st.text_area(
+                "経験・エピソード（任意）",
+                key="gen_episode",
+                height=80,
+                placeholder="例：前職でデータ入力や電話対応を担当していました"
+            )
+            gen_tone = st.selectbox(
+                "文章トーン",
+                ["丁寧","前向き","落ち着いた","未経験向け"],
+                key="gen_tone"
+            )
+            apply_generated = st.form_submit_button("✨ 自己PR文を作成する")
+            st.caption("⚠️ 生成された文章は下書きです。ご自身の経験に合わせて編集してください。")
+
         # PR初期値の決定（セッションキーで管理）
         if "pr_text_area" not in st.session_state:
             _pr_default = _prev.get("pr","")
@@ -863,6 +852,19 @@ if mode == "📝 入力フォーム（ユーザー）":
 
         st.markdown("---")
         submitted = st.form_submit_button("📋 内容を確認する", type="primary", use_container_width=True)
+
+    if apply_generated:
+        if gen_job != "選択してください" or gen_keywords.strip() or gen_episode.strip():
+            generated_pr = generate_pr_text(
+                gen_job if gen_job != "選択してください" else "その他",
+                gen_keywords,
+                gen_episode,
+                gen_tone
+            )
+            st.session_state["pr_text_area"] = generated_pr
+            st.rerun()
+        else:
+            st.warning("希望職種またはキーワードを入力してください。")
 
     if apply_generated:
         if gen_job != "選択してください" or gen_keywords.strip() or gen_episode.strip():
