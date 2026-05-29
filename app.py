@@ -61,7 +61,7 @@ def save_to_gsheet_full(record):
             header_val = None
         if not header_val:
             sheet.append_row(["id", "submitted_at", "name", "json_data", "client_id"])
-        # photo_b64は圧縮済み（40,000文字未満）のためGoogle Sheetsに保存可能
+        # photo_b64は圧縮済み（30,000文字未満を目標）のためGoogle Sheetsに保存可能
         record_for_sheet = record.copy()
         row = [
             record.get("id", ""),
@@ -542,7 +542,7 @@ if mode == "📝 入力フォーム（ユーザー）":
                 "submitted_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 **d,
             }
-            # 写真はローカルJSONに保存（photo_b64をrecordに含める）
+            # 写真は圧縮済みphoto_b64としてrecordに含め、ローカルJSONとGoogle Sheetsに保存
             photo_b64 = st.session_state.get("photo_b64", d.get("photo_b64",""))
             if photo_b64:
                 record["photo_b64"] = photo_b64
