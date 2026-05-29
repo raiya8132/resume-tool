@@ -183,30 +183,6 @@ def make_rirekisho(d):
     car_list  = d.get("career",    [])
     lic_list  = d.get("licenses",  [])
 
-    # 日付を自動反映（履歴書上部）
-    today = datetime.now()
-    date_str = f"{today.year}年{today.month}月{today.day}日現在"
-    for para in doc.paragraphs:
-        if "年" in para.text and "月" in para.text and "現在" in para.text:
-            for run in para.runs:
-                if "年" in run.text or "月" in run.text or "現在" in run.text:
-                    run.text = ""
-            if para.runs:
-                para.runs[0].text = date_str
-            else:
-                para.add_run(date_str)
-            break
-    # テーブル内の日付も確認
-    for table in doc.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                if "年" in cell.text and "現在" in cell.text:
-                    for para in cell.paragraphs:
-                        for run in para.runs:
-                            run.text = ""
-                    if cell.paragraphs:
-                        cell.paragraphs[0].add_run(date_str)
-
     t0 = doc.tables[0]
     set_cell(t0.rows[0].cells[1], d.get("furigana_name",""))
     set_cell(t0.rows[1].cells[1], d.get("name",""))
