@@ -754,8 +754,9 @@ if mode == "📝 入力フォーム（ユーザー）":
             st.caption("⚠️ 生成された文章は下書きです。ご自身の経験に合わせて編集してください。")
 
         # PR初期値の決定
+        # テンプレート反映フラグがある場合は強制的にテンプレートを使う
         _pr_default = _prev.get("pr","")
-        if not _pr_default and st.session_state.get("pr_template_text"):
+        if st.session_state.get("pr_template_text"):
             _pr_default = st.session_state.get("pr_template_text","")
         pr = st.text_area("自己PR *", value=_pr_default, height=200,
                           placeholder="コミュニケーションを大切にし、チームで目標達成することを意識してきました。")
@@ -845,6 +846,7 @@ if mode == "📝 入力フォーム（ユーザー）":
                 gen_tone
             )
             st.session_state["pr_template_text"] = generated_pr
+            st.session_state["pr_template_applied"] = True
             st.rerun()
         else:
             st.warning("希望職種またはキーワードを入力してください。")
