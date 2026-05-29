@@ -11,6 +11,8 @@ from PIL import Image
 import base64
 import gspread
 from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
 
 # ── 設定 ──────────────────────────────────────────────
 DATA_FILE        = Path("data/submissions.json")
@@ -46,41 +48,69 @@ def get_gsheet():
     except Exception as e:
         return None
 
-def save_to_gsheet(record):
+
+
+DRIVE_FOLDER_ID = None  # 共有フォルダIDはsecretsから取得（任意）
+
+def get_drive_service():
+    """Google Drive APIサービスを取得"""
     try:
-        sheet = get_gsheet()
-        if sheet is None:
-            return False
-        # ヘッダーがなければ追加
-        if sheet.row_count == 0 or sheet.cell(1, 1).value is None:
-            headers = ["id","submitted_at","name","furigana_name","gender","birthday","age",
-                      "postal","address","phone","email","nearest_station",
-                      "dependents","spouse","spouse_support","summary","skills","pr"]
-            sheet.append_row(headers)
-        row = [
-            record.get("id",""),
-            record.get("submitted_at",""),
-            record.get("name",""),
-            record.get("furigana_name",""),
-            record.get("gender",""),
-            record.get("birthday",""),
-            record.get("age",""),
-            record.get("postal",""),
-            record.get("address",""),
-            record.get("phone",""),
-            record.get("email",""),
-            record.get("nearest_station",""),
-            record.get("dependents",""),
-            record.get("spouse",""),
-            record.get("spouse_support",""),
-            record.get("summary",""),
-            record.get("skills",""),
-            record.get("pr",""),
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        scopes = [
+            "https://www.googleapis.com/auth/drive",
+            "https://www.googleapis.com/auth/spreadsheets",
         ]
-        sheet.append_row(row)
-        return True
-    except Exception as e:
-        return False
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+        service = build("drive", "v3", credentials=creds)
+        return service
+    except Exception:
+        return None
+
+def upload_photo_to_drive(photo_bytes, filename):
+    """写真をGoogle Driveにアップロードしてfile_idを返す"""
+    try:
+        service = get_drive_service()
+        if service is None:
+            return None
+        file_metadata = {"name": filename}
+        try:
+            folder_id = st.secrets["DRIVE_FOLDER_ID"]
+            file_metadata["parents"] = [folder_id]
+        except Exception:
+            pass
+        media = MediaIoBaseUpload(BytesIO(photo_bytes), mimetype="image/jpeg")
+        file = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields="id"
+        ).execute()
+        file_id = file.get("id")
+        # 閲覧権限を付与
+        service.permissions().create(
+            fileId=file_id,
+            body={"type": "anyone", "role": "reader"}
+        ).execute()
+        return file_id
+    except Exception:
+        return None
+
+def download_photo_from_drive(file_id):
+    """Google DriveからファイルIDで画像をダウンロードしてbytesを返す"""
+    try:
+        service = get_drive_service()
+        if service is None:
+            return None
+        request = service.files().get_media(fileId=file_id)
+        buf = BytesIO()
+        from googleapiclient.http import MediaIoBaseDownload
+        downloader = MediaIoBaseDownload(buf, request)
+        done = False
+        while not done:
+            _, done = downloader.next_chunk()
+        buf.seek(0)
+        return buf.read()
+    except Exception:
+        return None
 
 def save_to_gsheet_full(record):
     """全データをJSONとしてスプレッドシートに保存"""
@@ -95,7 +125,9 @@ def save_to_gsheet_full(record):
             header_val = None
         if not header_val:
             sheet.append_row(["id", "submitted_at", "name", "json_data", "client_id"])
-        # photo_b64はセルサイズ超過のため除外してから保存
+        # photo_b64 はBase64エンコードのため非常に大きく、
+        # Google Sheetsのセルサイズ上限（約50,000文字）を超えるため保存対象から除外。
+        # 証明写真はセッション中のみ保持され、docx生成時に使用される。
         record_for_sheet = {k: v for k, v in record.items() if k != "photo_b64"}
         row = [
             record.get("id", ""),
@@ -251,12 +283,23 @@ def make_rirekisho(d):
     t4 = doc.tables[4]
     set_cell(t4.rows[1].cells[0], d.get("pr",""))
 
-    # 証明写真の挿入（Base64からデコード）
+    # 証明写真の挿入
+    # 優先順位: 1.photo_b64(Base64) 2.photo_file_id(Google Drive) 3.なし
+    photo_bytes_for_doc = None
     photo_b64 = d.get("photo_b64") or st.session_state.get("photo_b64")
     if photo_b64:
         try:
-            photo_bytes = base64.b64decode(photo_b64)
-            img = Image.open(BytesIO(photo_bytes))
+            photo_bytes_for_doc = base64.b64decode(photo_b64)
+        except Exception:
+            pass
+    if not photo_bytes_for_doc and d.get("photo_file_id"):
+        try:
+            photo_bytes_for_doc = download_photo_from_drive(d["photo_file_id"])
+        except Exception:
+            pass
+    if photo_bytes_for_doc:
+        try:
+            img = Image.open(BytesIO(photo_bytes_for_doc))
             img = img.convert("RGB")
             img = img.resize((int(3/4*400), 400), Image.LANCZOS)
             img_buf = BytesIO()
@@ -552,6 +595,22 @@ if mode == "📝 入力フォーム（ユーザー）":
                 "submitted_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 **d,
             }
+            # 写真をGoogle Driveにアップロード
+            photo_b64 = st.session_state.get("photo_b64", d.get("photo_b64",""))
+            photo_file_id = None
+            if photo_b64:
+                try:
+                    photo_bytes_raw = base64.b64decode(photo_b64)
+                    fname = f"photo_{record['id']}.jpg"
+                    photo_file_id = upload_photo_to_drive(photo_bytes_raw, fname)
+                    if photo_file_id:
+                        record["photo_file_id"] = photo_file_id
+                        record.pop("photo_b64", None)
+                    else:
+                        st.warning("⚠️ 証明写真のクラウド保存に失敗しました。写真なしで保存します。")
+                except Exception:
+                    st.warning("⚠️ 証明写真のクラウド保存に失敗しました。写真なしで保存します。")
+
             records = load_data()
             records.append(record)
             save_data(records)
@@ -828,16 +887,18 @@ else:
         st.session_state.admin_client_id = None
 
     if not st.session_state.admin_logged_in:
-        pw = st.text_input("パスワード", type="password")
-        if st.button("ログイン"):
-            # client_idに対応するパスワードを確認
-            correct_pass = CLIENT_PASSWORDS.get(client_id, CLIENT_PASSWORDS.get("admin", "admin1234"))
-            if pw == correct_pass:
-                st.session_state.admin_logged_in = True
-                st.session_state.admin_client_id = client_id
-                st.rerun()
-            else:
-                st.error("❌ パスワードが違います")
+        if client_id not in CLIENT_PASSWORDS:
+            st.error("❌ このクライアントIDは登録されていません。URLをご確認ください。")
+        else:
+            pw = st.text_input("パスワード", type="password")
+            if st.button("ログイン"):
+                correct_pass = CLIENT_PASSWORDS[client_id]
+                if pw == correct_pass:
+                    st.session_state.admin_logged_in = True
+                    st.session_state.admin_client_id = client_id
+                    st.rerun()
+                else:
+                    st.error("❌ パスワードが違います")
     else:
         st.caption("⚠️ 本番利用時は管理パスワードを変更してください（st.secrets を使用）")
         st.success("✅ ログイン中")
@@ -848,8 +909,12 @@ else:
         logged_client = st.session_state.get("admin_client_id", "admin")
         records = load_all_from_gsheet(client_id=logged_client)
         if not records:
-            # フォールバック：ローカルファイルから読み込み
-            records = load_data()
+            # フォールバック：ローカルファイルから読み込み（client_idで絞り込む）
+            all_local = load_data()
+            records = [
+                r for r in all_local
+                if r.get("client_id", "admin") == logged_client
+            ]
         if not records:
             st.info("まだ送信されたデータがありません。")
         else:
