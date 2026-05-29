@@ -115,33 +115,36 @@ def delete_from_gsheet(record_id):
         return False
 
 def compress_photo_to_b64(photo_bytes):
-    """写真を圧縮してBase64文字列を返す（40,000文字未満）"""
-    img = Image.open(BytesIO(photo_bytes)).convert("RGB")
-    # 3:4比率に中央トリミング
-    w, h = img.size
-    target_ratio = 3 / 4
-    current_ratio = w / h
-    if current_ratio > target_ratio:
-        new_w = int(h * target_ratio)
-        left = (w - new_w) // 2
-        img = img.crop((left, 0, left + new_w, h))
-    else:
-        new_h = int(w / target_ratio)
-        top = (h - new_h) // 2
-        img = img.crop((0, top, w, top + new_h))
-    # サイズ・品質を調整してBase64が40,000文字未満になるようにする
-    for size in [(300, 400), (240, 320), (180, 240)]:
-        for quality in [85, 70, 55, 40]:
-            resized = img.resize(size, Image.LANCZOS)
-            buf = BytesIO()
-            resized.save(buf, format="JPEG", quality=quality)
-            b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
-            if len(b64) < 40000:
-                return b64
-    # 最終フォールバック
-    buf = BytesIO()
-    img.resize((120, 160), Image.LANCZOS).save(buf, format="JPEG", quality=30)
-    return base64.b64encode(buf.getvalue()).decode("utf-8")
+    """写真を圧縮してBase64文字列を返す（30,000文字未満）。失敗時は空文字を返す"""
+    try:
+        img = Image.open(BytesIO(photo_bytes)).convert("RGB")
+        # 3:4比率に中央トリミング
+        w, h = img.size
+        target_ratio = 3 / 4
+        current_ratio = w / h
+        if current_ratio > target_ratio:
+            new_w = int(h * target_ratio)
+            left = (w - new_w) // 2
+            img = img.crop((left, 0, left + new_w, h))
+        else:
+            new_h = int(w / target_ratio)
+            top = (h - new_h) // 2
+            img = img.crop((0, top, w, top + new_h))
+        # サイズ・品質を調整してBase64が30,000文字未満になるようにする
+        for size in [(240, 320), (180, 240), (150, 200), (120, 160)]:
+            for quality in [75, 60, 45, 30]:
+                resized = img.resize(size, Image.LANCZOS)
+                buf = BytesIO()
+                resized.save(buf, format="JPEG", quality=quality)
+                b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+                if len(b64) < 30000:
+                    return b64
+        # 最終フォールバック
+        buf = BytesIO()
+        img.resize((100, 133), Image.LANCZOS).save(buf, format="JPEG", quality=25)
+        return base64.b64encode(buf.getvalue()).decode("utf-8")
+    except Exception:
+        return ""
 
 st.set_page_config(page_title="経歴入力フォーム", page_icon="📄", layout="centered")
 
@@ -602,8 +605,11 @@ if mode == "📝 入力フォーム（ユーザー）":
                 st.error("❌ 画像ファイルが5MBを超えています。5MB以下の画像をアップロードしてください。")
             else:
                 photo_b64 = compress_photo_to_b64(photo_bytes)
-                st.session_state["photo_b64"] = photo_b64
-                st.image(BytesIO(photo_bytes), width=120, caption="アップロードされた写真")
+                if photo_b64:
+                    st.session_state["photo_b64"] = photo_b64
+                    st.image(BytesIO(base64.b64decode(photo_b64)), width=120, caption="アップロードされた写真")
+                else:
+                    st.error("❌ 証明写真の処理に失敗しました。別の画像でお試しください。")
         elif _prev.get("photo_b64"):
             st.info("写真はアップロード済みです ✅")
             img_data = base64.b64decode(_prev.get("photo_b64"))
